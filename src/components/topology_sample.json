@@ -1,0 +1,123 @@
+{
+  "nodes": [
+    {
+      "id": "alpha",
+      "url": "http://localhost:5000",
+      "status": "ONLINE",
+      "peer": "beta",
+      "active_drivers": ["motion", "webcam"],
+      "devices": [
+        {
+          "id": "motion-001",
+          "type": "motion_sensor",
+          "status": "MOTION_DETECTED",
+          "heartbeat": "ALIVE",
+          "heartbeat_age_s": 1
+        },
+        {
+          "id": "cam-001",
+          "type": "webcam",
+          "status": "STREAMING",
+          "heartbeat": "ALIVE",
+          "heartbeat_age_s": 2
+        }
+      ],
+      "last_seen_ms": 1740700000000,
+      "fail_count": 0
+    },
+    {
+      "id": "beta",
+      "url": "http://localhost:5001",
+      "status": "COMPROMISED",
+      "peer": "gamma",
+      "active_drivers": ["motion"],
+      "devices": [
+        {
+          "id": "motion-002",
+          "type": "motion_sensor",
+          "status": "ALERT",
+          "heartbeat": "ALIVE",
+          "heartbeat_age_s": 0
+        },
+        {
+          "id": "env-001",
+          "type": "env_sensor",
+          "status": "STREAMING",
+          "heartbeat": "ALIVE",
+          "heartbeat_age_s": 3
+        }
+      ],
+      "last_seen_ms": 1740699990000,
+      "fail_count": 1
+    },
+    {
+      "id": "gamma",
+      "url": "http://localhost:5002",
+      "status": "SYNCING",
+      "peer": "alpha",
+      "active_drivers": ["motion"],
+      "devices": [
+        {
+          "id": "motion-003",
+          "type": "motion_sensor",
+          "status": "DATA_PENDING",
+          "heartbeat": "UNKNOWN",
+          "heartbeat_age_s": null
+        },
+        {
+          "id": "env-002",
+          "type": "env_sensor",
+          "status": "STREAMING",
+          "heartbeat": "ALIVE",
+          "heartbeat_age_s": 5
+        }
+      ],
+      "last_seen_ms": 1740699970000,
+      "fail_count": 0
+    },
+    {
+      "id": "delta",
+      "url": "http://localhost:5003",
+      "status": "WARMING_UP",
+      "peer": "alpha",
+      "active_drivers": [],
+      "devices": [
+        {
+          "id": "cam-002",
+          "type": "webcam",
+          "status": "DATA_PENDING",
+          "heartbeat": "UNKNOWN",
+          "heartbeat_age_s": null
+        },
+        {
+          "id": "env-003",
+          "type": "env_sensor",
+          "status": "DATA_PENDING",
+          "heartbeat": "UNKNOWN",
+          "heartbeat_age_s": null
+        }
+      ],
+      "last_seen_ms": 1740699950000,
+      "fail_count": 0
+    },
+    {
+      "id": "epsilon",
+      "url": "http://localhost:5004",
+      "status": "DEAD",
+      "peer": "beta",
+      "active_drivers": [],
+      "devices": [
+        {
+          "id": "motion-004",
+          "type": "motion_sensor",
+          "status": "DATA_PENDING",
+          "heartbeat": "UNKNOWN",
+          "heartbeat_age_s": null
+        }
+      ],
+      "last_seen_ms": 1740699800000,
+      "fail_count": 5
+    }
+  ],
+  "generated_at": 1740700000
+}
