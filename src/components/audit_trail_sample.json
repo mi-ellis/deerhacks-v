@@ -1,0 +1,131 @@
+[
+  {
+    "_comment_about_this_file": [
+      "This file mirrors exactly what the backend emits on the 'audit_trail' Socket.io event.",
+      "The backend sends: io.emit('audit_trail', auditLog.slice(-50))",
+      "So the top-level value is always an ARRAY — the 50 most recent audit events.",
+      "Each object in the array is one audit event.",
+      "",
+      "There are only two possible values for 'signature_status':",
+      "  'VERIFIED'       — a Solana batch was successfully anchored (good news)",
+      "  'FRAUD_DETECTED' — a node was caught sending tampered data (bad news)",
+      "",
+      "Events are ordered oldest → newest (append-only log).",
+      "In React you would usually reverse this to show newest first in a list."
+    ],
+
+    "_comment_about_timestamps": [
+      "'timestamp' comes from the L2 node (when the sensor reading was taken).",
+      "'logged_at' is added by L3 (when L3 wrote the event to its in-memory log).",
+      "Both are Unix milliseconds. Use: new Date(logged_at).toLocaleString() to display them."
+    ],
+
+    "signature_status": "VERIFIED",
+
+    "_comment_signature_status": "VERIFIED means the Solana transaction went through. Data is trustworthy.",
+
+    "solana_link": "https://explorer.solana.com/tx/5KtPn1LGuxhFiwjxErkBbezXnoF3pNa5R36fMpBQ7fkFEhLoq2QdL3vDP8TkBnKFuijxapvbzFrQeX57PbDT18G?cluster=devnet",
+
+    "_comment_solana_link": "Click this URL to view the actual transaction on Solana's block explorer. null when no transaction was submitted yet.",
+
+    "evidence": "Device motion-001 batch committed — peer_consistency=OK",
+
+    "_comment_evidence": "Human-readable description of what happened. Always present.",
+
+    "timestamp": 1740700010000,
+
+    "_comment_timestamp_ms": "When the sensor reading was taken (milliseconds since Unix epoch, from L2 node).",
+
+    "node": "alpha",
+
+    "_comment_node": "Which L2 node reported or detected this event.",
+
+    "device_id": "motion-001",
+
+    "_comment_device_id": "Which physical sensor device this event is about.",
+
+    "batch_id": "5KtPn1LGuxhFiwjxErkBbezXnoF3pNa5R36fMpBQ7fkFEhLoq2QdL3vDP8TkBnKFuijxapvbzFrQeX57PbDT18G",
+
+    "_comment_batch_id": "The Solana transaction signature. Only present on VERIFIED events, never on FRAUD_DETECTED.",
+
+    "logged_at": 1740700010500,
+
+    "_comment_logged_at": "When L3 wrote this event to its log (milliseconds since Unix epoch). Always present."
+  },
+
+  {
+    "signature_status": "VERIFIED",
+    "solana_link": "https://explorer.solana.com/tx/3jGpQV9KwFhNoYw1LiRdNPdmRkBBzgvxTkLqR8J4fRePmcZt7Sg3MwNaAtCbXyUVwqQJkpLeM9QuqStAdTy2eN?cluster=devnet",
+    "evidence": "Device cam-001 batch committed — peer_consistency=OK",
+    "timestamp": 1740700025000,
+    "node": "alpha",
+    "device_id": "cam-001",
+    "batch_id": "3jGpQV9KwFhNoYw1LiRdNPdmRkBBzgvxTkLqR8J4fRePmcZt7Sg3MwNaAtCbXyUVwqQJkpLeM9QuqStAdTy2eN",
+    "logged_at": 1740700025400
+  },
+
+  {
+    "signature_status": "VERIFIED",
+    "solana_link": "https://explorer.solana.com/tx/2cNxRtLpZqV8Fw4XaQdm9sY6HbKMjEpTvuGn7WLr5SoBtAeRhCkZgYiXfNsDVwUoqJmPlTs1KrQcBuAdTz3nW?cluster=devnet",
+    "evidence": "Device env-002 batch committed — peer_consistency=PENDING",
+    "timestamp": 1740700040000,
+    "node": "gamma",
+    "device_id": "env-002",
+    "batch_id": "2cNxRtLpZqV8Fw4XaQdm9sY6HbKMjEpTvuGn7WLr5SoBtAeRhCkZgYiXfNsDVwUoqJmPlTs1KrQcBuAdTz3nW",
+    "logged_at": 1740700040600
+  },
+
+  {
+    "_comment_about_fraud_event": [
+      "This is a FRAUD_DETECTED event — the most important kind.",
+      "It means one L2 node caught another sending data with a broken HMAC signature.",
+      "The 'node' field is the ACCUSER (honest), not the liar.",
+      "The lying node's URL would appear in the topology as status=COMPROMISED.",
+      "",
+      "'solana_link' here points to the BFT dispute transaction —",
+      "permanent on-chain proof that the fraud happened."
+    ],
+
+    "signature_status": "FRAUD_DETECTED",
+
+    "solana_link": "https://explorer.solana.com/tx/4xWqBpLmKfNtYvAd8RsZjHcG3ePuCkMoVbXeNiQdLr7SwFtJgZnUpYhXoNsEVwTqJmPlTs2KrQcBuAdTz9fR?cluster=devnet",
+
+    "evidence": "HMAC_MISMATCH: value=42.7 does NOT match HMAC tag for motion-002 — data tampered",
+
+    "timestamp": 1740700055000,
+
+    "node": "alpha",
+
+    "_comment_node_fraud": "alpha is the honest ACCUSER that detected the fraud. beta (the lying node) will appear as COMPROMISED in the topology.",
+
+    "device_id": "motion-002",
+
+    "logged_at": 1740700055200
+  },
+
+  {
+    "signature_status": "FRAUD_DETECTED",
+
+    "solana_link": null,
+
+    "_comment_null_link": "solana_link is null when the BFT dispute transaction has not been submitted to Solana yet. The fraud is still recorded locally.",
+
+    "evidence": "REPLAY_ATTACK: timestamp 1740699900000 is older than last accepted 1740700040000 — stale packet",
+
+    "timestamp": 1740700070000,
+    "node": "gamma",
+    "device_id": "env-001",
+    "logged_at": 1740700070800
+  },
+
+  {
+    "signature_status": "VERIFIED",
+    "solana_link": "https://explorer.solana.com/tx/7mPsQnLvZrW9Gx5YbRdkJhF4eCuDlNoBwXfMiTaKr8StAeVhCkUgZjXiNsDVwPoqJmGoTs3LrQcBuAdTz6yQ?cluster=devnet",
+    "evidence": "Device motion-003 batch committed — peer_consistency=OK",
+    "timestamp": 1740700085000,
+    "node": "gamma",
+    "device_id": "motion-003",
+    "batch_id": "7mPsQnLvZrW9Gx5YbRdkJhF4eCuDlNoBwXfMiTaKr8StAeVhCkUgZjXiNsDVwPoqJmGoTs3LrQcBuAdTz6yQ",
+    "logged_at": 1740700085300
+  }
+]
