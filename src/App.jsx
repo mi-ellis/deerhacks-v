@@ -4,11 +4,12 @@ import StatusLegend from "./components/StatusLegend";
 import EventFeed from "./components/EventFeed";
 import NetworkGraph from "./components/NetworkGraph";
 import NodeSidebar from "./components/NodeSidebar";
+import Chatbox from './components/Chatbox';
 
 const BOTTOM_MIN = 80;
 const BOTTOM_MAX = 600;
 const BOTTOM_DEFAULT = 220;
-import Chatbox from './components/Chatbox';
+
 
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
