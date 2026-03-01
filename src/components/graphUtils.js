@@ -22,19 +22,11 @@ export const DEVICE_STATUS_COLORS = {
 export const L3_COLOR = "#00c853";
 
 export function resolveColor(node) {
-<<<<<<< HEAD
   if (node.nodeType === "L3") return L3_COLOR;
   if (node.nodeType === "L2") return L2_STATUS_COLORS[node.status] ?? "#757575";
   // Device: a dead heartbeat overrides whatever the driver reports
   if (node.heartbeat === "DEAD") return DEVICE_STATUS_COLORS.DEAD;
   return DEVICE_STATUS_COLORS[node.status] ?? "#546e7a";
-=======
-  // If status is COMPROMISED, return red
-  if (node.status === "COMPROMISED") return "#ff1744";
-  
-  // Otherwise, return green
-  return "#00e676";
->>>>>>> 3f49e09469fcaf140c3d2befa6e6c040d8583541
 }
 
 export function resolveRadius(node) {

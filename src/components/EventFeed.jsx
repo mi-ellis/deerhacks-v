@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-import { Filter, Download } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-=======
 import { Search, Download } from "lucide-react";
-import { useState } from "react";
->>>>>>> 3f49e09469fcaf140c3d2befa6e6c040d8583541
+import { useEffect, useRef, useState } from "react";
 import rawAuditData from "./audit_trail_sample.json";
 
 const L3_BASE_URL = process.env.REACT_APP_L3_URL || "http://localhost:8080";
@@ -62,8 +57,15 @@ const EventFeed = ({ isDarkMode }) => {
     }
 
     // Create CSV header
-    const headers = ["Time (UTC)", "Status", "Node", "Device ID", "Evidence", "Solana Link"];
-    
+    const headers = [
+      "Time (UTC)",
+      "Status",
+      "Node",
+      "Device ID",
+      "Evidence",
+      "Solana Link",
+    ];
+
     // Create CSV rows
     const rows = filteredEvents.map((e) => {
       const timeStr = new Date(e.logged_at).toLocaleTimeString("en-US", {
@@ -86,11 +88,9 @@ const EventFeed = ({ isDarkMode }) => {
       ...rows.map((row) =>
         row
           .map((cell) =>
-            typeof cell === "string" && cell.includes(",")
-              ? `"${cell}"`
-              : cell
+            typeof cell === "string" && cell.includes(",") ? `"${cell}"` : cell,
           )
-          .join(",")
+          .join(","),
       ),
     ].join("\n");
 
@@ -99,7 +99,10 @@ const EventFeed = ({ isDarkMode }) => {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `node_events_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute(
+      "download",
+      `node_events_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -180,7 +183,9 @@ const EventFeed = ({ isDarkMode }) => {
 
       {/* Filter Panel */}
       {showFilterPanel && (
-        <div className={`px-4 py-3 border-b ${borderColor} ${inputBg} space-y-3`}>
+        <div
+          className={`px-4 py-3 border-b ${borderColor} ${inputBg} space-y-3`}
+        >
           {/* Search Input */}
           <div>
             <label className="text-[10px] font-bold uppercase tracking-widest block mb-1">
@@ -263,30 +268,19 @@ const EventFeed = ({ isDarkMode }) => {
           </tr>
         </thead>
         <tbody>
-<<<<<<< HEAD
-          {events.map((e, i) => {
-            const isVerified = e.signature_status === "VERIFIED";
-            const statusCls = isVerified ? "text-emerald-500" : "text-red-500";
-            const timeStr = new Date(e.logged_at).toLocaleTimeString("en-US", {
-              timeZone: "America/New_York",
-              hour12: false,
-            });
-            const shortLink = e.solana_link
-              ? (e.solana_link.split("/tx/")[1] ?? "").slice(0, 12) + "…"
-              : null;
-=======
           {filteredEvents.length > 0 ? (
             filteredEvents.map((e, i) => {
               const isVerified = e.signature_status === "VERIFIED";
-              const statusCls = isVerified ? "text-emerald-500" : "text-red-500";
+              const statusCls = isVerified
+                ? "text-emerald-500"
+                : "text-red-500";
               const timeStr = new Date(e.logged_at).toLocaleTimeString(
                 "en-US",
-                { timeZone: "UTC", hour12: false }
+                { timeZone: "America/New_York", hour12: false },
               );
               const shortLink = e.solana_link
                 ? (e.solana_link.split("/tx/")[1] ?? "").slice(0, 12) + "…"
                 : null;
->>>>>>> 3f49e09469fcaf140c3d2befa6e6c040d8583541
 
               return (
                 <tr key={i} className={`border-b last:border-0 ${borderColor}`}>
