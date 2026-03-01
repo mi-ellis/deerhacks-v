@@ -80,7 +80,8 @@
       "This is a FRAUD_DETECTED event — the most important kind.",
       "It means one L2 node caught another sending data with a broken HMAC signature.",
       "The 'node' field is the ACCUSER (honest), not the liar.",
-      "The lying node's URL would appear in the topology as status=COMPROMISED.",
+      "alpha's declared peer is beta, so alpha is the one comparing data against beta.",
+      "The lying node (beta) appears as status=COMPROMISED in the topology.",
       "",
       "'solana_link' here points to the BFT dispute transaction —",
       "permanent on-chain proof that the fraud happened."
@@ -90,30 +91,20 @@
 
     "solana_link": "https://explorer.solana.com/tx/4xWqBpLmKfNtYvAd8RsZjHcG3ePuCkMoVbXeNiQdLr7SwFtJgZnUpYhXoNsEVwTqJmPlTs2KrQcBuAdTz9fR?cluster=devnet",
 
-    "evidence": "HMAC_MISMATCH: value=42.7 does NOT match HMAC tag for motion-002 — data tampered",
+    "evidence": "HMAC_MISMATCH: value=42.7 does NOT match HMAC tag for motion-002 — data tampered by beta",
 
     "timestamp": 1740700055000,
-
     "node": "alpha",
-
-    "_comment_node_fraud": "alpha is the honest ACCUSER that detected the fraud. beta (the lying node) will appear as COMPROMISED in the topology.",
-
     "device_id": "motion-002",
-
     "logged_at": 1740700055200
   },
 
   {
     "signature_status": "FRAUD_DETECTED",
-
     "solana_link": null,
-
-    "_comment_null_link": "solana_link is null when the BFT dispute transaction has not been submitted to Solana yet. The fraud is still recorded locally.",
-
-    "evidence": "REPLAY_ATTACK: timestamp 1740699900000 is older than last accepted 1740700040000 — stale packet",
-
+    "evidence": "REPLAY_ATTACK: timestamp 1740699820000 is older than last accepted 1740700025000 — stale packet replayed by beta",
     "timestamp": 1740700070000,
-    "node": "gamma",
+    "node": "alpha",
     "device_id": "env-001",
     "logged_at": 1740700070800
   },
@@ -121,10 +112,10 @@
   {
     "signature_status": "VERIFIED",
     "solana_link": "https://explorer.solana.com/tx/7mPsQnLvZrW9Gx5YbRdkJhF4eCuDlNoBwXfMiTaKr8StAeVhCkUgZjXiNsDVwPoqJmGoTs3LrQcBuAdTz6yQ?cluster=devnet",
-    "evidence": "Device motion-003 batch committed — peer_consistency=OK",
+    "evidence": "Device env-002 batch committed — peer_consistency=OK",
     "timestamp": 1740700085000,
     "node": "gamma",
-    "device_id": "motion-003",
+    "device_id": "env-002",
     "batch_id": "7mPsQnLvZrW9Gx5YbRdkJhF4eCuDlNoBwXfMiTaKr8StAeVhCkUgZjXiNsDVwPoqJmGoTs3LrQcBuAdTz6yQ",
     "logged_at": 1740700085300
   }

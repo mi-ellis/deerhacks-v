@@ -8,6 +8,8 @@ import {
 } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import topologyData from "./topology_sample.json";
+import { resolveColor, resolveRadius } from "./graphUtils";
+import NodeSidebar from "./NodeSidebar";
 
 // ── Error boundary — surfaces runtime crashes visibly ──────────────────────────
 class ErrorBoundary extends Component {
@@ -38,25 +40,8 @@ class ErrorBoundary extends Component {
   }
 }
 
-// ── Colour palettes ────────────────────────────────────────────────────────────
+// ── Graph constants ────────────────────────────────────────────────────────────
 
-const L2_STATUS_COLORS = {
-  ONLINE: "#00e676",
-  COMPROMISED: "#ff1744",
-  WARMING_UP: "#ffab40",
-  SYNCING: "#40c4ff",
-  DEAD: "#546e7a",
-};
-
-const DEVICE_STATUS_COLORS = {
-  STREAMING: "#69f0ae",
-  MOTION_DETECTED: "#ce93d8",
-  ALERT: "#ff6d00",
-  DATA_PENDING: "#78909c",
-  UNKNOWN: "#546e7a",
-};
-
-const L3_COLOR = "#00c853";
 const BG_COLOR = "#ffffff";
 
 // Link styles indexed by linkType
@@ -64,20 +49,6 @@ const LINK_STYLES = {
   parent: { color: "rgba(0, 0, 0, 0.30)", width: 4.0, dash: [] },
   peer: { color: "rgba(14, 116, 235, 0.70)", width: 3.0, dash: [8, 6] },
 };
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function resolveColor(node) {
-  if (node.nodeType === "L3") return L3_COLOR;
-  if (node.nodeType === "L2") return L2_STATUS_COLORS[node.status] ?? "#757575";
-  return DEVICE_STATUS_COLORS[node.status] ?? "#546e7a";
-}
-
-function resolveRadius(node) {
-  if (node.nodeType === "L3") return 56;
-  if (node.nodeType === "L2") return 36;
-  return 24;
-}
 
 // ── Graph data builder ─────────────────────────────────────────────────────────
 
@@ -146,6 +117,8 @@ function NetworkGraphInner() {
     width: window.innerWidth,
     height: window.innerHeight,
   });
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const [pinnedNode, setPinnedNode] = useState(null);
 
   const graphData = useMemo(() => buildGraphData(topologyData), []);
 
@@ -280,9 +253,22 @@ function NetworkGraphInner() {
   // ── Hover tracking ───────────────────────────────────────────────────────────
   const onNodeHover = useCallback((node) => {
     hoveredRef.current = node ? node.id : null;
-    // Cursor hint
+    setHoveredNode(node ?? null);
     document.body.style.cursor = node ? "pointer" : "default";
   }, []);
+
+  // ── Click handling ───────────────────────────────────────────────────────────
+  const onNodeClick = useCallback((node) => {
+    setPinnedNode(node ?? null);
+  }, []);
+
+  const onBackgroundClick = useCallback(() => {
+    setPinnedNode(null);
+  }, []);
+
+  // Sidebar visibility / display node
+  const sidebarNode = hoveredNode ?? pinnedNode;
+  const sidebarVisible = hoveredNode !== null || pinnedNode !== null;
 
   return (
     <div
@@ -309,6 +295,8 @@ function NetworkGraphInner() {
         linkDirectionalParticles={0}
         // Interaction
         onNodeHover={onNodeHover}
+        onNodeClick={onNodeClick}
+        onBackgroundClick={onBackgroundClick}
         enableNodeDrag={true}
         enableZoomInteraction={true}
         minZoom={0.15}
@@ -320,6 +308,7 @@ function NetworkGraphInner() {
         // No labels — hover only for now
         nodeLabel={() => ""}
       />
+      <NodeSidebar node={sidebarNode} visible={sidebarVisible} />
     </div>
   );
 }

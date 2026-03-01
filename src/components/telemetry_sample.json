@@ -1,0 +1,51 @@
+[
+  {
+    "device_id": "motion-001",
+    "consensus_score": "100%",
+    "history": [
+      { "timestamp": 1740699700000, "value": 0.0, "state": "NO_MOTION" },
+      { "timestamp": 1740699710000, "value": 0.0, "state": "NO_MOTION" },
+      { "timestamp": 1740699720000, "value": 0.0, "state": "NO_MOTION" },
+      { "timestamp": 1740699730000, "value": 1.0, "state": "MOTION" },
+      { "timestamp": 1740699740000, "value": 1.0, "state": "MOTION" },
+      { "timestamp": 1740699750000, "value": 1.0, "state": "MOTION" },
+      { "timestamp": 1740699760000, "value": 0.0, "state": "NO_MOTION" },
+      { "timestamp": 1740699770000, "value": 0.0, "state": "NO_MOTION" },
+      { "timestamp": 1740699780000, "value": 1.0, "state": "MOTION" },
+      { "timestamp": 1740699790000, "value": 1.0, "state": "MOTION" }
+    ]
+  },
+  {
+    "device_id": "cam-001",
+    "consensus_score": "100%",
+    "history": [
+      { "timestamp": 1740699700000, "value": 112.4, "state": "STREAMING" },
+      { "timestamp": 1740699710000, "value": 115.1, "state": "STREAMING" },
+      { "timestamp": 1740699720000, "value": 118.9, "state": "STREAMING" },
+      { "timestamp": 1740699730000, "value": 121.3, "state": "STREAMING" },
+      { "timestamp": 1740699740000, "value": 119.7, "state": "STREAMING" },
+      { "timestamp": 1740699750000, "value": 116.2, "state": "STREAMING" },
+      { "timestamp": 1740699760000, "value": 114.8, "state": "STREAMING" },
+      { "timestamp": 1740699770000, "value": 113.0, "state": "STREAMING" },
+      { "timestamp": 1740699780000, "value": 117.5, "state": "STREAMING" },
+      { "timestamp": 1740699790000, "value": 120.1, "state": "STREAMING" }
+    ]
+  },
+  {
+    "device_id": "env-002",
+    "consensus_score": "DISPUTED",
+    "history": [
+      { "timestamp": 1740699700000, "value": 21.3, "state": "STREAMING" },
+      { "timestamp": 1740699710000, "value": 21.4, "state": "STREAMING" },
+      { "timestamp": 1740699720000, "value": 21.6, "state": "STREAMING" },
+      { "timestamp": 1740699730000, "value": 21.5, "state": "STREAMING" },
+      { "timestamp": 1740699740000, "value": 21.7, "state": "STREAMING" },
+      { "timestamp": 1740699750000, "value": 22.0, "state": "STREAMING" },
+      { "timestamp": 1740699760000, "value": 22.1, "state": "STREAMING" },
+      { "timestamp": 1740699770000, "value": 22.3, "state": "STREAMING" },
+      { "timestamp": 1740699780000, "value": 22.2, "state": "STREAMING" },
+      { "timestamp": 1740699790000, "value": 22.4, "state": "STREAMING" }
+    ]
+  }
+]
+
