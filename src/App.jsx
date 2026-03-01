@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import StatusLegend from './components/StatusLegend';
 import EventFeed from './components/EventFeed';
+import Chatbox from './components/Chatbox';
 
 const App = () => {
   // Hook to manage Dark Mode state (boolean)
@@ -9,17 +10,17 @@ const App = () => {
 
   // Hook to manage the array of table events
   const [events, setEvents] = useState([
-    { time: new Date().toLocaleTimeString(), status: 'ACTIVE', node: '0x00...000', log: 'SYSTEM INITIALIZED' }
+    { time: new Date().toLocaleTimeString(), status: 'ACTIVE', node: '0x00...000', link: 'https://explorer.solana.com/tx/5KtPn1LGuxhFiwjxErkBbezXnoF3pNa5R36fMpBQ7fkFEhLoq2QdL3vDP8TkBnKFuijxapvbzFrQeX57PbDT18G?cluster=devnet' }
   ]);
 
   // useEffect runs once when the component mounts to start the "data script"
   useEffect(() => {
     // Array of possible log messages to simulate real-time variety
-    const logs = [
-      "PRIMARY COOLANT FLOW NORMAL",
-      "NEUTRON FLUX STABILIZED",
-      "CORE TEMPERATURE AT 285°C",
-      "CONTAINMENT PRESSURE NOMINAL"
+    const links = [
+      "https://explorer.solana.com/tx/3jGpQV9KwFhNoYw1LiRdNPdmRkBBzgvxTkLqR8J4fRePmcZt7Sg3MwNaAtCbXyUVwqQJkpLeM9QuqStAdTy2eN?cluster=devnet",
+      "https://explorer.solana.com/tx/3jGpQV9KwFhNoYw1LiRdNPdmRkBBzgvxTkLqR8J4fRePmcZt7Sg3MwNaAtCbXyUVwqQJkpLeM9QuqStAdTy2eN?cluster=devnet",
+      "https://explorer.solana.com/tx/3jGpQV9KwFhNoYw1LiRdNPdmRkBBzgvxTkLqR8J4fRePmcZt7Sg3MwNaAtCbXyUVwqQJkpLeM9QuqStAdTy2eN?cluster=devnet",
+      "https://explorer.solana.com/tx/3jGpQV9KwFhNoYw1LiRdNPdmRkBBzgvxTkLqR8J4fRePmcZt7Sg3MwNaAtCbXyUVwqQJkpLeM9QuqStAdTy2eN?cluster=devnetL"
     ];
 
     // Set an interval to run every 4 seconds
@@ -31,7 +32,7 @@ const App = () => {
         // Generate a random-looking hex Node ID
         node: `0x${Math.random().toString(16).slice(2, 5)}...${Math.random().toString(16).slice(2, 5)}`,
         // Pick a random log from the array above
-        log: logs[Math.floor(Math.random() * logs.length)]
+        link: logs[Math.floor(Math.random() * logs.length)]
       };
       
       // Update state: add newEntry to the front, keep only the most recent 5
@@ -60,9 +61,10 @@ const App = () => {
       </main>
 
       {/* Bottom UI area */}
-      <div className="p-6">
+      <div className="p-6 space-y-4">
         <StatusLegend isDarkMode={isDarkMode} />
         <EventFeed events={events} isDarkMode={isDarkMode} />
+        <Chatbox isDarkMode={isDarkMode} nodeData={events} />
       </div>
     </div>
   );
