@@ -32,7 +32,7 @@ const App = () => {
         // Generate a random-looking hex Node ID
         node: `0x${Math.random().toString(16).slice(2, 5)}...${Math.random().toString(16).slice(2, 5)}`,
         // Pick a random log from the array above
-        link: logs[Math.floor(Math.random() * logs.length)]
+        link: links[Math.floor(Math.random() * links.length)]
       };
       
       // Update state: add newEntry to the front, keep only the most recent 5
