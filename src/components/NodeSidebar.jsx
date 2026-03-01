@@ -14,7 +14,7 @@ const SIDEBAR_MAX_W = 640;
 
 // ── Draggable divider ─────────────────────────────────────────────────────────
 
-function DragDivider({ onDragDelta }) {
+function DragDivider({ onDragDelta, isDarkMode }) {
   const dragging = useRef(false);
   const lastY = useRef(0);
 
@@ -48,9 +48,11 @@ function DragDivider({ onDragDelta }) {
         flexShrink: 0,
         height: HDIV,
         cursor: "ns-resize",
-        background: "linear-gradient(to top, #e0e0e0, #d0d0d0)",
-        borderTop: "1px solid #bbb",
-        borderBottom: "1px solid #bbb",
+        background: isDarkMode
+          ? "linear-gradient(to top, #27272a, #1f1f23)"
+          : "linear-gradient(to top, #e0e0e0, #d0d0d0)",
+        borderTop: `1px solid ${isDarkMode ? "#3f3f46" : "#bbb"}`,
+        borderBottom: `1px solid ${isDarkMode ? "#3f3f46" : "#bbb"}`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -61,7 +63,7 @@ function DragDivider({ onDragDelta }) {
           width: 32,
           height: 3,
           borderRadius: 2,
-          background: "#aaa",
+          background: isDarkMode ? "#52525b" : "#aaa",
         }}
       />
     </div>
@@ -70,7 +72,7 @@ function DragDivider({ onDragDelta }) {
 
 // ── NodeSidebar ───────────────────────────────────────────────────────────────
 
-export default function NodeSidebar({ node, visible }) {
+export default function NodeSidebar({ node, visible, isDarkMode }) {
   const lastNodeRef = useRef(node);
   if (node) lastNodeRef.current = node;
   const display = lastNodeRef.current;
@@ -161,178 +163,191 @@ export default function NodeSidebar({ node, visible }) {
   const nodeLabel = display?.label ?? display?.id ?? "—";
 
   return (
+    // Outer container: width-based show/hide so it pushes sibling content in the flex row
     <div
-      ref={sidebarRef}
       style={{
-        position: "fixed",
-        top: 0,
-        right: 0,
-        width: sidebarWidth,
-        height: "100vh",
-        transform: visible ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
-        zIndex: 1000,
-        display: "flex",
-        flexDirection: "column",
-        borderLeft: "2px solid #000",
-        pointerEvents: visible ? "auto" : "none",
-        userSelect: "none",
-        background: "#fff",
+        width: visible ? sidebarWidth : 0,
+        flexShrink: 0,
+        height: "100%",
+        overflow: "hidden",
+        transition: "width 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
+        borderLeft: visible
+          ? `2px solid ${isDarkMode ? "#3f3f46" : "#000"}`
+          : "none",
       }}
     >
-      {/* ── Left-edge resize handle ── */}
+      {/* Inner container keeps its full width so content doesn't wrap during animation */}
       <div
-        onMouseDown={onResizeMouseDown}
+        ref={sidebarRef}
         style={{
-          position: "absolute",
-          top: 0,
-          left: -5,
-          width: 10,
+          width: sidebarWidth,
           height: "100%",
-          cursor: "ew-resize",
-          zIndex: 10,
-        }}
-      />
-      {/* ── Title bar ── */}
-      <div
-        style={{
-          flexShrink: 0,
-          height: TITLE_H,
-          background: "#000",
-          color: "#fff",
           display: "flex",
-          alignItems: "center",
-          padding: "0 18px",
-          fontFamily: "monospace",
-          fontSize: 13,
-          fontWeight: 700,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
+          flexDirection: "column",
+          background: isDarkMode ? "#18181b" : "#fff",
+          position: "relative",
+          userSelect: "none",
+          transition: "background 0.3s",
         }}
       >
-        Node Inspector
-      </div>
-
-      {/* ── Two info boxes ── */}
-      <div
-        style={{
-          flexShrink: 0,
-          height: HEADER_H,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "0 10px",
-          background: "#fff",
-        }}
-      >
-        {/* Status box */}
+        {/* ── Left-edge resize handle — sits at inner-left so it's within overflow:hidden boundary ── */}
+        <div
+          onMouseDown={onResizeMouseDown}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: 8,
+            height: "100%",
+            cursor: "ew-resize",
+            zIndex: 10,
+          }}
+        />
+        {/* ── Title bar ── */}
         <div
           style={{
-            flex: 1,
-            border: "1.5px solid #000",
-            borderRadius: 4,
-            padding: "10px 12px",
+            flexShrink: 0,
+            height: TITLE_H,
+            background: isDarkMode ? "#09090b" : "#000",
+            color: "#fff",
             display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            height: 58,
-            justifyContent: "center",
+            alignItems: "center",
+            padding: "0 18px",
+            fontFamily: "monospace",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
           }}
         >
-          <span
+          Node Inspector
+        </div>
+
+        {/* ── Two info boxes ── */}
+        <div
+          style={{
+            flexShrink: 0,
+            height: HEADER_H,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "0 10px",
+            background: isDarkMode ? "#18181b" : "#fff",
+          }}
+        >
+          {/* Status box */}
+          <div
             style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "#888",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
+              flex: 1,
+              border: `1.5px solid ${isDarkMode ? "#3f3f46" : "#000"}`,
+              borderRadius: 4,
+              padding: "10px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              height: 58,
+              justifyContent: "center",
             }}
           >
-            Status
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div
+            <span
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: statusColor,
-                flexShrink: 0,
-                boxShadow: `0 0 6px ${statusColor}88`,
+                fontFamily: "monospace",
+                fontSize: 9,
+                color: isDarkMode ? "#71717a" : "#888",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
               }}
-            />
+            >
+              Status
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: statusColor,
+                  flexShrink: 0,
+                  boxShadow: `0 0 6px ${statusColor}88`,
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: statusColor,
+                  letterSpacing: "0.05em",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {display?.status ?? "—"}
+              </span>
+            </div>
+          </div>
+
+          {/* Node ID box */}
+          <div
+            style={{
+              flex: 1,
+              border: `1.5px solid ${isDarkMode ? "#3f3f46" : "#000"}`,
+              borderRadius: 4,
+              padding: "10px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              height: 58,
+              justifyContent: "center",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "monospace",
+                fontSize: 9,
+                color: isDarkMode ? "#71717a" : "#888",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+              }}
+            >
+              Node ID
+            </span>
             <span
               style={{
                 fontFamily: "monospace",
                 fontSize: 11,
                 fontWeight: 700,
-                color: statusColor,
-                letterSpacing: "0.05em",
+                color: isDarkMode ? "#f4f4f5" : "#111",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
               }}
             >
-              {display?.status ?? "—"}
+              {nodeLabel}
             </span>
           </div>
         </div>
 
-        {/* Node ID box */}
-        <div
-          style={{
-            flex: 1,
-            border: "1.5px solid #000",
-            borderRadius: 4,
-            padding: "10px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            height: 58,
-            justifyContent: "center",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "monospace",
-              fontSize: 9,
-              color: "#888",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-            }}
-          >
-            Node ID
-          </span>
-          <span
-            style={{
-              fontFamily: "monospace",
-              fontSize: 11,
-              fontWeight: 700,
-              color: "#111",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {nodeLabel}
-          </span>
-        </div>
+        {/* ── Spacer above div1 (expands when div1 is dragged down) ── */}
+        {spacerH > 0 && <div style={{ flexShrink: 0, height: spacerH }} />}
+
+        {/* ── Divider 1 ── */}
+        <DragDivider onDragDelta={onDrag1} isDarkMode={isDarkMode} />
+
+        {/* ── Data display section ── */}
+        <DefaultDataDisplay
+          display={display}
+          height={telemH}
+          isDarkMode={isDarkMode}
+        />
+
+        {/* ── Divider 2 ── */}
+        <DragDivider onDragDelta={onDrag2} isDarkMode={isDarkMode} />
+
+        {/* ── GeminiChat section ── */}
+        <GeminiChat height={geminiH} isDarkMode={isDarkMode} />
       </div>
-
-      {/* ── Spacer above div1 (expands when div1 is dragged down) ── */}
-      {spacerH > 0 && <div style={{ flexShrink: 0, height: spacerH }} />}
-
-      {/* ── Divider 1 ── */}
-      <DragDivider onDragDelta={onDrag1} />
-
-      {/* ── Data display section ── */}
-      <DefaultDataDisplay display={display} height={telemH} />
-
-      {/* ── Divider 2 ── */}
-      <DragDivider onDragDelta={onDrag2} />
-
-      {/* ── GeminiChat section ── */}
-      <GeminiChat height={geminiH} />
     </div>
   );
 }

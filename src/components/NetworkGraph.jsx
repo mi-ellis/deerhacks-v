@@ -9,7 +9,6 @@ import {
 import ForceGraph2D from "react-force-graph-2d";
 import topologyData from "./topology_sample.json";
 import { resolveColor, resolveRadius } from "./graphUtils";
-import NodeSidebar from "./NodeSidebar";
 
 // ── Error boundary — surfaces runtime crashes visibly ──────────────────────────
 class ErrorBoundary extends Component {
@@ -42,12 +41,17 @@ class ErrorBoundary extends Component {
 
 // ── Graph constants ────────────────────────────────────────────────────────────
 
-const BG_COLOR = "#ffffff";
+const BG_LIGHT = "#ffffff";
+const BG_DARK = "#1c1c24"; // slightly dimmed, not pure black
 
 // Link styles indexed by linkType
 const LINK_STYLES = {
   parent: { color: "rgba(0, 0, 0, 0.30)", width: 4.0, dash: [] },
   peer: { color: "rgba(14, 116, 235, 0.70)", width: 3.0, dash: [8, 6] },
+};
+const LINK_STYLES_DARK = {
+  parent: { color: "rgba(255, 255, 255, 0.25)", width: 4.0, dash: [] },
+  peer: { color: "rgba(99, 179, 237, 0.75)", width: 3.0, dash: [8, 6] },
 };
 
 // ── Graph data builder ─────────────────────────────────────────────────────────
@@ -109,14 +113,11 @@ function buildGraphData(topology) {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-function NetworkGraphInner() {
+function NetworkGraphInner({ onNodeSelect, isDarkMode }) {
   const fgRef = useRef(null);
   const wrapRef = useRef(null);
   const hoveredRef = useRef(null);
-  const [dims, setDims] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
+  const [dims, setDims] = useState({ width: 800, height: 600 });
   const [hoveredNode, setHoveredNode] = useState(null);
   const [pinnedNode, setPinnedNode] = useState(null);
 
@@ -158,52 +159,58 @@ function NetworkGraphInner() {
   }, []);
 
   // ── Node renderer ────────────────────────────────────────────────────────────
-  const paintNode = useCallback((node, ctx, globalScale) => {
-    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
-    const r = resolveRadius(node);
-    const color = resolveColor(node);
-    const isHovered = hoveredRef.current === node.id;
+  const paintNode = useCallback(
+    (node, ctx, globalScale) => {
+      if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+      const r = resolveRadius(node);
+      const color = resolveColor(node);
+      // Use state (not just ref) so the callback is recreated on hover change → canvas repaint
+      const isHovered = hoveredNode?.id === node.id;
 
-    // Glow / aura for L3 only
-    if (node.nodeType === "L3") {
-      const grd = ctx.createRadialGradient(
-        node.x,
-        node.y,
-        r * 0.4,
-        node.x,
-        node.y,
-        r * 2.4,
-      );
-      grd.addColorStop(0, "rgba(0,200,83,0.18)");
-      grd.addColorStop(1, "rgba(0,200,83,0)");
+      // Glow / aura for L3 only
+      if (node.nodeType === "L3") {
+        const grd = ctx.createRadialGradient(
+          node.x,
+          node.y,
+          r * 0.4,
+          node.x,
+          node.y,
+          r * 2.4,
+        );
+        grd.addColorStop(0, "rgba(0,200,83,0.18)");
+        grd.addColorStop(1, "rgba(0,200,83,0)");
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r * 2.4, 0, 2 * Math.PI);
+        ctx.fillStyle = grd;
+        ctx.fill();
+      }
+
+      // Fill circle
       ctx.beginPath();
-      ctx.arc(node.x, node.y, r * 2.4, 0, 2 * Math.PI);
-      ctx.fillStyle = grd;
+      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
       ctx.fill();
-    }
 
-    // Fill circle
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    // Thin dark border so nodes are crisp against the white bg
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-    ctx.strokeStyle = "rgba(0,0,0,0.18)";
-    ctx.lineWidth = 1.2 / globalScale;
-    ctx.stroke();
-
-    // Hover outline — dark ring outside the node
-    if (isHovered) {
+      // Thin border so nodes are crisp against the bg
       ctx.beginPath();
-      ctx.arc(node.x, node.y, r + 5 / globalScale, 0, 2 * Math.PI);
-      ctx.strokeStyle = "#111111";
-      ctx.lineWidth = 2.5 / globalScale;
+      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.strokeStyle = isDarkMode
+        ? "rgba(255,255,255,0.22)"
+        : "rgba(0,0,0,0.18)";
+      ctx.lineWidth = 1.2 / globalScale;
       ctx.stroke();
-    }
-  }, []);
+
+      // Hover outline — contrasting ring outside the node
+      if (isHovered) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 5 / globalScale, 0, 2 * Math.PI);
+        ctx.strokeStyle = isDarkMode ? "#f4f4f5" : "#111111";
+        ctx.lineWidth = 2.5 / globalScale;
+        ctx.stroke();
+      }
+    },
+    [hoveredNode, isDarkMode],
+  );
 
   // Clickable / hoverable hit area (generously sized)
   const paintNodeArea = useCallback((node, color, ctx) => {
@@ -216,39 +223,43 @@ function NetworkGraphInner() {
   }, []);
 
   // ── Link renderer — lines clipped to node perimeters ────────────────────────
-  const paintLink = useCallback((link, ctx, globalScale) => {
-    const src = link.source;
-    const tgt = link.target;
-    if (!src || !tgt || !Number.isFinite(src.x) || !Number.isFinite(tgt.x))
-      return;
+  const paintLink = useCallback(
+    (link, ctx, globalScale) => {
+      const src = link.source;
+      const tgt = link.target;
+      if (!src || !tgt || !Number.isFinite(src.x) || !Number.isFinite(tgt.x))
+        return;
 
-    const style = LINK_STYLES[link.linkType] ?? LINK_STYLES.parent;
+      const styles = isDarkMode ? LINK_STYLES_DARK : LINK_STYLES;
+      const style = styles[link.linkType] ?? styles.parent;
 
-    // Shrink each endpoint to the node's perimeter so lines don't underlap fills
-    const dx = tgt.x - src.x;
-    const dy = tgt.y - src.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist === 0) return;
-    const ux = dx / dist;
-    const uy = dy / dist;
-    const rSrc = resolveRadius(src);
-    const rTgt = resolveRadius(tgt);
-    const x1 = src.x + ux * rSrc;
-    const y1 = src.y + uy * rSrc;
-    const x2 = tgt.x - ux * rTgt;
-    const y2 = tgt.y - uy * rTgt;
+      // Shrink each endpoint to the node's perimeter so lines don't underlap fills
+      const dx = tgt.x - src.x;
+      const dy = tgt.y - src.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist === 0) return;
+      const ux = dx / dist;
+      const uy = dy / dist;
+      const rSrc = resolveRadius(src);
+      const rTgt = resolveRadius(tgt);
+      const x1 = src.x + ux * rSrc;
+      const y1 = src.y + uy * rSrc;
+      const x2 = tgt.x - ux * rTgt;
+      const y2 = tgt.y - uy * rTgt;
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.setLineDash(style.dash);
-    ctx.strokeStyle = style.color;
-    ctx.lineWidth = style.width / globalScale;
-    ctx.lineCap = "round";
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-    ctx.restore();
-  }, []);
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash(style.dash);
+      ctx.strokeStyle = style.color;
+      ctx.lineWidth = style.width / globalScale;
+      ctx.lineCap = "round";
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.restore();
+    },
+    [isDarkMode],
+  );
 
   // ── Hover tracking ───────────────────────────────────────────────────────────
   const onNodeHover = useCallback((node) => {
@@ -256,6 +267,12 @@ function NetworkGraphInner() {
     setHoveredNode(node ?? null);
     document.body.style.cursor = node ? "pointer" : "default";
   }, []);
+
+  // Notify parent when pinned node changes
+  useEffect(() => {
+    onNodeSelect?.(pinnedNode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedNode]);
 
   // ── Click handling ───────────────────────────────────────────────────────────
   const onNodeClick = useCallback((node) => {
@@ -266,18 +283,15 @@ function NetworkGraphInner() {
     setPinnedNode(null);
   }, []);
 
-  // Sidebar visibility / display node
-  const sidebarNode = hoveredNode ?? pinnedNode;
-  const sidebarVisible = hoveredNode !== null || pinnedNode !== null;
-
   return (
     <div
       ref={wrapRef}
       style={{
-        width: "100vw",
-        height: "100vh",
+        width: "100%",
+        height: "100%",
         overflow: "hidden",
-        background: "#ffffff",
+        background: isDarkMode ? BG_DARK : BG_LIGHT,
+        transition: "background 0.3s",
       }}
     >
       <ForceGraph2D
@@ -285,7 +299,7 @@ function NetworkGraphInner() {
         width={dims.width}
         height={dims.height}
         graphData={graphData}
-        backgroundColor={BG_COLOR}
+        backgroundColor={isDarkMode ? BG_DARK : BG_LIGHT}
         // Node rendering
         nodeVal={(node) => resolveRadius(node) ** 2 / 4}
         nodeCanvasObject={paintNode}
@@ -308,15 +322,14 @@ function NetworkGraphInner() {
         // No labels — hover only for now
         nodeLabel={() => ""}
       />
-      <NodeSidebar node={sidebarNode} visible={sidebarVisible} />
     </div>
   );
 }
 
-export default function NetworkGraph() {
+export default function NetworkGraph({ onNodeSelect, isDarkMode }) {
   return (
     <ErrorBoundary>
-      <NetworkGraphInner />
+      <NetworkGraphInner onNodeSelect={onNodeSelect} isDarkMode={isDarkMode} />
     </ErrorBoundary>
   );
 }

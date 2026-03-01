@@ -17,10 +17,18 @@ function formatTs(ms) {
 
 // ── DefaultDataDisplay ────────────────────────────────────────────────────────
 
-export default function DefaultDataDisplay({ display, height }) {
+export default function DefaultDataDisplay({ display, height, isDarkMode }) {
   const deviceId = display?.nodeType === "device" ? display.label : null;
   const entry = deviceId ? telemetryByDevice[deviceId] : null;
   const history = entry ? entry.history.slice(-20) : [];
+
+  const bg = isDarkMode ? "#18181b" : "#fff";
+  const mutedText = isDarkMode ? "#71717a" : "#999";
+  const subText = isDarkMode ? "#a1a1aa" : "#555";
+  const divider = isDarkMode ? "#27272a" : "#eee";
+  const rowEven = isDarkMode ? "#1f1f23" : "#fafafa";
+  const rowOdd = isDarkMode ? "#18181b" : "#fff";
+  const bodyText = isDarkMode ? "#e4e4e7" : "#333";
 
   return (
     <div
@@ -29,17 +37,18 @@ export default function DefaultDataDisplay({ display, height }) {
         overflowY: "auto",
         fontFamily: "monospace",
         fontSize: 11,
-        background: "#fff",
+        background: bg,
         flexShrink: 0,
+        transition: "background 0.3s",
       }}
     >
       {!deviceId && (
-        <div style={{ padding: "12px 16px", color: "#999" }}>
+        <div style={{ padding: "12px 16px", color: mutedText }}>
           No telemetry — select a device node.
         </div>
       )}
       {deviceId && !entry && (
-        <div style={{ padding: "12px 16px", color: "#999" }}>
+        <div style={{ padding: "12px 16px", color: mutedText }}>
           No telemetry found for <strong>{deviceId}</strong>.
         </div>
       )}
@@ -48,7 +57,7 @@ export default function DefaultDataDisplay({ display, height }) {
           <div
             style={{
               padding: "8px 14px 4px",
-              color: "#555",
+              color: subText,
               fontSize: 10,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -60,7 +69,7 @@ export default function DefaultDataDisplay({ display, height }) {
             <span
               style={{
                 color:
-                  entry.consensus_score === "DISPUTED" ? "#ff6d00" : "#388e3c",
+                  entry.consensus_score === "DISPUTED" ? "#ff6d00" : "#4ade80",
               }}
             >
               {entry.consensus_score}
@@ -71,9 +80,9 @@ export default function DefaultDataDisplay({ display, height }) {
               display: "grid",
               gridTemplateColumns: "1fr 1fr 1fr",
               padding: "4px 14px 2px",
-              color: "#999",
+              color: mutedText,
               fontSize: 10,
-              borderBottom: "1px solid #eee",
+              borderBottom: `1px solid ${divider}`,
             }}
           >
             <span>TIME</span>
@@ -87,14 +96,14 @@ export default function DefaultDataDisplay({ display, height }) {
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr 1fr",
                 padding: "5px 14px",
-                borderBottom: "1px solid #f5f5f5",
-                background: i % 2 === 0 ? "#fafafa" : "#fff",
-                color: "#333",
+                borderBottom: `1px solid ${divider}`,
+                background: i % 2 === 0 ? rowEven : rowOdd,
+                color: bodyText,
               }}
             >
-              <span style={{ color: "#777" }}>{formatTs(h.timestamp)}</span>
+              <span style={{ color: mutedText }}>{formatTs(h.timestamp)}</span>
               <span>{h.value}</span>
-              <span style={{ color: "#555" }}>{h.state}</span>
+              <span style={{ color: subText }}>{h.state}</span>
             </div>
           ))}
         </>
