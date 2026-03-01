@@ -346,7 +346,11 @@ export default function NodeSidebar({ node, visible, isDarkMode }) {
         <DragDivider onDragDelta={onDrag2} isDarkMode={isDarkMode} />
 
         {/* ── GeminiChat section ── */}
-        <GeminiChat height={geminiH} isDarkMode={isDarkMode} />
+        <GeminiChat
+          height={geminiH}
+          isDarkMode={isDarkMode}
+          nodeData={display}
+        />
       </div>
     </div>
   );
