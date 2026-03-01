@@ -8,6 +8,7 @@ import NodeSidebar from "./components/NodeSidebar";
 const BOTTOM_MIN = 80;
 const BOTTOM_MAX = 600;
 const BOTTOM_DEFAULT = 220;
+import Chatbox from './components/Chatbox';
 
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);

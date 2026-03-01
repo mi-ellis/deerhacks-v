@@ -1,4 +1,5 @@
 import { Moon, Sun, UserCircle } from 'lucide-react';
+import SolNetLogo from '../Assets/SolnetLogo-removebg-preview.png';
 
 const Header = ({ isDarkMode, toggleDark }) => (
   // Border color changes based on theme prop
@@ -7,9 +8,15 @@ const Header = ({ isDarkMode, toggleDark }) => (
     
     {/* Brand/Logo Section */}
     <div className="flex items-center gap-2">
-      {/* Square logo flips color based on theme */}
-      <div className={`w-5 h-5 rounded-sm ${isDarkMode ? 'bg-white' : 'bg-black'}`} />
-      <span className="font-bold tracking-tighter text-lg uppercase">TBD</span>
+      {/* Logo image with dark mode support */}
+    <img 
+        src={SolNetLogo}
+        alt="SolNet Logo" 
+        className={`h-10 w-12 object-contain transition-all p-1 rounded-full ${
+          isDarkMode ? 'bg-white' : ''
+        }`}
+      />  
+      <span className="font-bold tracking-tighter text-lg uppercase">SolNet</span>
     </div>
 
     {/* Actions Section */}
