@@ -2,12 +2,12 @@ import { L2_STATUS_COLORS } from "./graphUtils";
 
 const StatusLegend = ({ isDarkMode }) => {
   const statuses = [
-    { label: "ONLINE",      color: L2_STATUS_COLORS.ONLINE },
-    { label: "SYNCING",     color: L2_STATUS_COLORS.SYNCING },
-    { label: "WARMING UP",  color: L2_STATUS_COLORS.WARMING_UP },
+    { label: "ONLINE", color: L2_STATUS_COLORS.ONLINE },
+    { label: "SYNCING", color: L2_STATUS_COLORS.SYNCING },
+    { label: "WARMING UP", color: L2_STATUS_COLORS.WARMING_UP },
     { label: "COMPROMISED", color: L2_STATUS_COLORS.COMPROMISED },
-    { label: "PENDING",     color: L2_STATUS_COLORS.PENDING },
-    { label: "DEAD",        color: L2_STATUS_COLORS.DEAD },
+    { label: "PENDING", color: L2_STATUS_COLORS.PENDING },
+    { label: "DEAD", color: L2_STATUS_COLORS.DEAD },
   ];
 
   return (

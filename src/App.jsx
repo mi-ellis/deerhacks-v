@@ -4,10 +4,13 @@ import StatusLegend from "./components/StatusLegend";
 import EventFeed from "./components/EventFeed";
 import NetworkGraph from "./components/NetworkGraph";
 import NodeSidebar from "./components/NodeSidebar";
+import Chatbox from './components/Chatbox';
+import rawAuditData from "./components/audit_trail_sample.json";
 
 const BOTTOM_MIN = 80;
 const BOTTOM_MAX = 600;
 const BOTTOM_DEFAULT = 220;
+
 
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -48,6 +51,24 @@ const App = () => {
 
   const handleColor = isDarkMode ? "#3f3f46" : "#d4d4d8";
   const handleBg = isDarkMode ? "#27272a" : "#f4f4f5";
+
+  // Calculate node status counts from audit data
+  const nodeStatusCount = rawAuditData.reduce(
+    (acc, event) => {
+      if (event.signature_status && event.node) {
+        if (event.signature_status === "VERIFIED") {
+          acc.active.add(event.node);
+        } else if (event.signature_status === "FRAUD_DETECTED") {
+          acc.compromised.add(event.node);
+        }
+      }
+      return acc;
+    },
+    { active: new Set(), compromised: new Set() }
+  );
+
+  const activeCount = nodeStatusCount.active.size;
+  const compromisedCount = nodeStatusCount.compromised.size;
 
   return (
     // Root: flex-row so the sidebar pushes the main content left instead of overlaying it
@@ -102,7 +123,7 @@ const App = () => {
           style={{ height: bottomH, flexShrink: 0, overflowY: "auto" }}
           className="px-4 pb-4 pt-2"
         >
-          <StatusLegend isDarkMode={isDarkMode} />
+          <StatusLegend isDarkMode={isDarkMode} activeCount={activeCount} compromisedCount={compromisedCount} />
           <EventFeed isDarkMode={isDarkMode} />
         </div>
       </div>
