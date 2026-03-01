@@ -40,7 +40,6 @@ npm run build
 
 - React 18
 - Tailwind CSS
-- Google Fonts (Space Grotesk, Space Mono, Inter)
 
 ## Design
 
