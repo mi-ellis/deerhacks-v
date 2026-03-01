@@ -5,9 +5,7 @@ import rawAuditData from "./audit_trail_sample.json";
 const L3_BASE_URL = process.env.REACT_APP_L3_URL || "http://localhost:8080";
 
 // Fallback: sample data filtered and reversed for offline use
-const FALLBACK_EVENTS = [...rawAuditData]
-  .filter((e) => e.signature_status)
-  .reverse();
+const FALLBACK_EVENTS = [...rawAuditData].reverse();
 
 const EventFeed = ({ isDarkMode }) => {
   const [events, setEvents] = useState(FALLBACK_EVENTS);
@@ -24,8 +22,7 @@ const EventFeed = ({ isDarkMode }) => {
         const data = await res.json();
         if (!active) return;
         hasLiveData.current = true;
-        // Newest first; filter out entries that lack signature_status
-        const filtered = [...data].filter((e) => e.signature_status).reverse();
+        const filtered = [...data].reverse();
         setEvents(filtered);
       } catch {
         // L3 unreachable — keep showing whatever we have

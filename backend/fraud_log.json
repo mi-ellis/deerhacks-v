@@ -89,5 +89,31 @@
     "ownStatus": "MOTION",
     "reportedStatus": "NO_MOTION",
     "verdict": "B pre-gossiped NO_MOTION — we later got MOTION"
+  },
+  {
+    "detectedAt": "2026-03-01T07:51:47.325Z",
+    "kind": "ANALYSIS_CONFLICT",
+    "accusingNode": "A",
+    "lyingPeer": "B",
+    "lyingPeerUrl": "http://localhost:5001",
+    "deviceId": "WEBCAM_01",
+    "frameHash": "5ec0155ab0bef07fa5619771cfb065491e9dca4941a05743e3a1460e7c1f8c95",
+    "timestamp": 1772351507,
+    "ownStatus": "UNKNOWN",
+    "reportedStatus": "NO_MOTION",
+    "verdict": "Peer reported NO_MOTION — cross-validation returned UNKNOWN"
+  },
+  {
+    "detectedAt": "2026-03-01T07:55:30.092Z",
+    "kind": "ANALYSIS_CONFLICT",
+    "accusingNode": "B",
+    "lyingPeer": "A",
+    "lyingPeerUrl": "http://localhost:5000",
+    "deviceId": "WEBCAM_01",
+    "frameHash": "e47d7c4e5c4aaaeaab2f0817c4088a9f5581958179333c0dc115b957c936bd64",
+    "timestamp": 1772351729,
+    "ownStatus": "UNKNOWN",
+    "reportedStatus": "MOTION",
+    "verdict": "Peer reported MOTION — cross-validation returned UNKNOWN"
   }
 ]
