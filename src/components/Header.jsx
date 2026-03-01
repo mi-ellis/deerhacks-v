@@ -1,4 +1,4 @@
-import { Moon, Sun, UserCircle } from 'lucide-react';
+import { Moon, Sun} from 'lucide-react';
 import SolNetLogo from '../Assets/SolnetLogo-removebg-preview.png';
 
 const Header = ({ isDarkMode, toggleDark }) => (
@@ -29,7 +29,6 @@ const Header = ({ isDarkMode, toggleDark }) => (
         {/* Swap icon and icon color based on theme state */}
         {isDarkMode ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} />}
       </button>
-      <UserCircle size={24} className="text-zinc-400" />
     </div>
   </header>
 );

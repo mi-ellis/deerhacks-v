@@ -19,9 +19,11 @@ export const DEVICE_STATUS_COLORS = {
 export const L3_COLOR = "#00c853";
 
 export function resolveColor(node) {
-  if (node.nodeType === "L3") return L3_COLOR;
-  if (node.nodeType === "L2") return L2_STATUS_COLORS[node.status] ?? "#757575";
-  return DEVICE_STATUS_COLORS[node.status] ?? "#546e7a";
+  // If status is COMPROMISED, return red
+  if (node.status === "COMPROMISED") return "#ff1744";
+  
+  // Otherwise, return green
+  return "#00e676";
 }
 
 export function resolveRadius(node) {
