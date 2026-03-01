@@ -1,14 +1,18 @@
+import { useEffect, useRef, useState } from "react";
 import telemetryData from "./telemetry_sample.json";
 
-// ── Telemetry lookup ──────────────────────────────────────────────────────────
+// ── Telemetry lookup (fallback) ───────────────────────────────────────────────
 
-const telemetryByDevice = Object.fromEntries(
+const FALLBACK_TELEMETRY = Object.fromEntries(
   telemetryData.map((d) => [d.device_id, d]),
 );
 
+const L3_BASE_URL = process.env.REACT_APP_L3_URL || "http://localhost:8080";
+
 function formatTs(ms) {
   const d = new Date(ms);
-  return d.toLocaleTimeString([], {
+  return d.toLocaleTimeString("en-US", {
+    timeZone: "America/New_York",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -19,7 +23,37 @@ function formatTs(ms) {
 
 export default function DefaultDataDisplay({ display, height, isDarkMode }) {
   const deviceId = display?.nodeType === "device" ? display.label : null;
-  const entry = deviceId ? telemetryByDevice[deviceId] : null;
+
+  // Live telemetry map: device_id → { device_id, history, consensus_score }
+  const [liveTelemetry, setLiveTelemetry] = useState(FALLBACK_TELEMETRY);
+  const hasLiveData = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    async function poll() {
+      try {
+        const res = await fetch(`${L3_BASE_URL}/telemetry`, {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok || !active) return;
+        const packets = await res.json(); // array of { device_id, history, consensus_score }
+        hasLiveData.current = true;
+        setLiveTelemetry(
+          Object.fromEntries(packets.map((p) => [p.device_id, p])),
+        );
+      } catch {
+        // L3 unreachable — keep showing whatever we have
+      }
+    }
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  const entry = deviceId ? liveTelemetry[deviceId] : null;
   const history = entry ? entry.history.slice(-20) : [];
 
   const bg = isDarkMode ? "#18181b" : "#fff";

@@ -23,6 +23,7 @@ if val < 0:
         "status":    "INVALID_READING",
         "level":     "CRITICAL",
         "tilt_deg":  val,
+        "value":     val,
         "is_healthy": False,
         "msg":       "Negative tilt magnitude — sensor error or tampered data",
     }
@@ -31,6 +32,7 @@ elif val <= 5:
         "status":    "FLAT",
         "level":     "NORMAL",
         "tilt_deg":  val,
+        "value":     val,
         "is_healthy": True,
         "msg":       "Device is flat / resting face-up",
     }
@@ -39,6 +41,7 @@ elif val <= 20:
         "status":    "SLIGHT_TILT",
         "level":     "NORMAL",
         "tilt_deg":  val,
+        "value":     val,
         "is_healthy": True,
         "msg":       "Minor tilt — casually held or propped",
     }
@@ -47,6 +50,7 @@ elif val <= 45:
         "status":    "TILTED",
         "level":     "NORMAL",
         "tilt_deg":  val,
+        "value":     val,
         "is_healthy": True,
         "msg":       "Significant tilt — active use / landscape mode",
     }
@@ -55,6 +59,7 @@ elif val <= 80:
         "status":    "STEEP_TILT",
         "level":     "NORMAL",
         "tilt_deg":  val,
+        "value":     val,
         "is_healthy": True,
         "msg":       "Near-vertical — portrait reading mode",
     }
@@ -63,6 +68,7 @@ elif val <= 90:
         "status":    "UPRIGHT",
         "level":     "NORMAL",
         "tilt_deg":  val,
+        "value":     val,
         "is_healthy": True,
         "msg":       "Device held fully upright / vertical",
     }
@@ -71,9 +77,10 @@ else:
         "status":    "INVERTED",
         "level":     "WARNING",
         "tilt_deg":  val,
+        "value":     val,
         "is_healthy": True,
         "msg":       "Device is face-down or tilted past vertical",
     }
 
-print(f"[{dev}] {r['status']} (tilt={val:.2f}°) — {r['msg']}")
+print(f"[{dev}] {r['status']} (tilt={val:.2f}°) — {r['msg']}", file=sys.stderr)
 print(json.dumps(r))

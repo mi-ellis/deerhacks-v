@@ -3,6 +3,8 @@ import { resolveColor } from "./graphUtils";
 import DefaultDataDisplay from "./DefaultDataDisplay";
 import GeminiChat from "./GeminiChat";
 
+const L3_BASE_URL = process.env.REACT_APP_L3_URL || "http://localhost:8080";
+
 // ── Layout constants ──────────────────────────────────────────────────────────
 
 const TITLE_H = 44; // px — black title bar
@@ -160,7 +162,44 @@ export default function NodeSidebar({ node, visible, isDarkMode }) {
   );
 
   const statusColor = display ? resolveColor(display) : "#546e7a";
+  // For device nodes a dead heartbeat overrides the driver-reported status label
+  const effectiveStatus =
+    display?.nodeType === "device" && display?.heartbeat === "DEAD"
+      ? "DEAD"
+      : display?.status;
   const nodeLabel = display?.label ?? display?.id ?? "—";
+  const isPending = display?.status === "PENDING";
+
+  const [approvalState, setApprovalState] = useState(null); // null | 'loading' | 'approved' | 'denied'
+
+  // Reset approval feedback when a new node is selected
+  useEffect(() => {
+    setApprovalState(null);
+  }, [display?.id]);
+
+  const handleApproval = useCallback(
+    async (approved) => {
+      if (!display?.id || approvalState === "loading") return;
+      setApprovalState("loading");
+      try {
+        const res = await fetch(`${L3_BASE_URL}/approve-node`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nodeId: display.id, approved }),
+        });
+        if (res.ok) {
+          setApprovalState(approved ? "approved" : "denied");
+        } else {
+          setApprovalState(null);
+          console.error("[NodeSidebar] approve-node returned", res.status);
+        }
+      } catch (e) {
+        setApprovalState(null);
+        console.error("[NodeSidebar] approve-node error:", e.message);
+      }
+    },
+    [display?.id, approvalState],
+  );
 
   return (
     // Outer container: width-based show/hide so it pushes sibling content in the flex row
@@ -223,7 +262,7 @@ export default function NodeSidebar({ node, visible, isDarkMode }) {
           Node Inspector
         </div>
 
-        {/* ── Two info boxes ── */}
+        {/* ── Two info boxes (or approval panel for PENDING nodes) ── */}
         <div
           style={{
             flexShrink: 0,
@@ -235,98 +274,207 @@ export default function NodeSidebar({ node, visible, isDarkMode }) {
             background: isDarkMode ? "#18181b" : "#fff",
           }}
         >
-          {/* Status box */}
-          <div
-            style={{
-              flex: 1,
-              border: `1.5px solid ${isDarkMode ? "#3f3f46" : "#000"}`,
-              borderRadius: 4,
-              padding: "10px 12px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              height: 58,
-              justifyContent: "center",
-            }}
-          >
-            <span
+          {isPending ? (
+            // ── Pending approval panel ─────────────────────────────────────
+            <div
               style={{
-                fontFamily: "monospace",
-                fontSize: 9,
-                color: isDarkMode ? "#71717a" : "#888",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
+                flex: 1,
+                border: `1.5px solid ${isDarkMode ? "#3f3f46" : "#000"}`,
+                borderRadius: 4,
+                padding: "8px 12px",
+                height: 58,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: 6,
               }}
             >
-              Status
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  background: statusColor,
-                  flexShrink: 0,
-                  boxShadow: `0 0 6px ${statusColor}88`,
-                }}
-              />
               <span
                 style={{
                   fontFamily: "monospace",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: statusColor,
-                  letterSpacing: "0.05em",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  fontSize: 9,
+                  color: isDarkMode ? "#71717a" : "#888",
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
                 }}
               >
-                {display?.status ?? "—"}
+                {nodeLabel} — Awaiting Approval
               </span>
+              {approvalState === null && (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    onClick={() => handleApproval(true)}
+                    style={{
+                      flex: 1,
+                      padding: "4px 0",
+                      border: "none",
+                      borderRadius: 3,
+                      background: "#00c853",
+                      color: "#fff",
+                      fontFamily: "monospace",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleApproval(false)}
+                    style={{
+                      flex: 1,
+                      padding: "4px 0",
+                      border: "none",
+                      borderRadius: 3,
+                      background: "#d32f2f",
+                      color: "#fff",
+                      fontFamily: "monospace",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Deny
+                  </button>
+                </div>
+              )}
+              {approvalState === "loading" && (
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 11,
+                    color: isDarkMode ? "#71717a" : "#888",
+                  }}
+                >
+                  Sending decision...
+                </span>
+              )}
+              {approvalState === "approved" && (
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#00c853",
+                  }}
+                >
+                  Node approved.
+                </span>
+              )}
+              {approvalState === "denied" && (
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#d32f2f",
+                  }}
+                >
+                  Node denied and removed.
+                </span>
+              )}
             </div>
-          </div>
+          ) : (
+            // ── Standard status + node ID boxes ───────────────────────────
+            <>
+              {/* Status box */}
+              <div
+                style={{
+                  flex: 1,
+                  border: `1.5px solid ${isDarkMode ? "#3f3f46" : "#000"}`,
+                  borderRadius: 4,
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  height: 58,
+                  justifyContent: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 9,
+                    color: isDarkMode ? "#71717a" : "#888",
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Status
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      background: statusColor,
+                      flexShrink: 0,
+                      boxShadow: `0 0 6px ${statusColor}88`,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: statusColor,
+                      letterSpacing: "0.05em",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {effectiveStatus ?? "—"}
+                  </span>
+                </div>
+              </div>
 
-          {/* Node ID box */}
-          <div
-            style={{
-              flex: 1,
-              border: `1.5px solid ${isDarkMode ? "#3f3f46" : "#000"}`,
-              borderRadius: 4,
-              padding: "10px 12px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              height: 58,
-              justifyContent: "center",
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "monospace",
-                fontSize: 9,
-                color: isDarkMode ? "#71717a" : "#888",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-              }}
-            >
-              Node ID
-            </span>
-            <span
-              style={{
-                fontFamily: "monospace",
-                fontSize: 11,
-                fontWeight: 700,
-                color: isDarkMode ? "#f4f4f5" : "#111",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {nodeLabel}
-            </span>
-          </div>
+              {/* Node ID box */}
+              <div
+                style={{
+                  flex: 1,
+                  border: `1.5px solid ${isDarkMode ? "#3f3f46" : "#000"}`,
+                  borderRadius: 4,
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  height: 58,
+                  justifyContent: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 9,
+                    color: isDarkMode ? "#71717a" : "#888",
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Node ID
+                </span>
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: isDarkMode ? "#f4f4f5" : "#111",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {nodeLabel}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── Spacer above div1 (expands when div1 is dragged down) ── */}

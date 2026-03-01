@@ -1,10 +1,43 @@
 import { Filter, Download } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import rawAuditData from "./audit_trail_sample.json";
 
-// Filter out comment-only objects (they lack signature_status) and show newest first
-const events = [...rawAuditData].filter((e) => e.signature_status).reverse();
+const L3_BASE_URL = process.env.REACT_APP_L3_URL || "http://localhost:8080";
+
+// Fallback: sample data filtered and reversed for offline use
+const FALLBACK_EVENTS = [...rawAuditData]
+  .filter((e) => e.signature_status)
+  .reverse();
 
 const EventFeed = ({ isDarkMode }) => {
+  const [events, setEvents] = useState(FALLBACK_EVENTS);
+  const hasLiveData = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    async function poll() {
+      try {
+        const res = await fetch(`${L3_BASE_URL}/audit`, {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active) return;
+        hasLiveData.current = true;
+        // Newest first; filter out entries that lack signature_status
+        const filtered = [...data].filter((e) => e.signature_status).reverse();
+        setEvents(filtered);
+      } catch {
+        // L3 unreachable — keep showing whatever we have
+      }
+    }
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
   const borderColor = isDarkMode ? "border-zinc-800" : "border-zinc-200";
   const headerBg = isDarkMode ? "bg-zinc-800/50" : "bg-zinc-50";
 
@@ -48,7 +81,7 @@ const EventFeed = ({ isDarkMode }) => {
             const isVerified = e.signature_status === "VERIFIED";
             const statusCls = isVerified ? "text-emerald-500" : "text-red-500";
             const timeStr = new Date(e.logged_at).toLocaleTimeString("en-US", {
-              timeZone: "UTC",
+              timeZone: "America/New_York",
               hour12: false,
             });
             const shortLink = e.solana_link

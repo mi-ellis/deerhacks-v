@@ -10,26 +10,37 @@ Falls back to simulation when running on a desktop (no Android hardware).
 import time
 import math
 import random
+import io
+import sys
 from layer1_base import SolanaIoTDevice
 
 # ─── Try to import real Android sensors via plyer ──────────────────────────────
+# jnius prints its own traceback directly to stderr before raising when run in
+# a Pydroid 3 terminal (no JNIEnv available outside the app runner).
+# We suppress stderr during the import so the fallback stays clean.
+_accel = _compass = None
 try:
-    from plyer import accelerometer, compass
-    accelerometer.enable()
-    compass.enable()
+    _saved_stderr, sys.stderr = sys.stderr, io.StringIO()
+    try:
+        from plyer import accelerometer as _accel, compass as _compass
+        _accel.enable()
+        _compass.enable()
+    finally:
+        sys.stderr = _saved_stderr
     time.sleep(0.5)
     REAL_SENSORS = True
     print("[sensors] plyer OK — reading from hardware accelerometer & compass")
 except Exception as _e:
     REAL_SENSORS = False
-    print(f"[sensors] plyer unavailable ({_e}) — using simulation fallback")
+    _reason = str(_e) or type(_e).__name__
+    print(f"[sensors] plyer unavailable ({_reason}) — using simulation fallback")
 
 # ─── Sensor reading helpers ────────────────────────────────────────────────────
 
 def _read_real():
     """Return (azimuth_deg, pitch_deg, roll_deg) from Android hardware sensors."""
-    acc = accelerometer.acceleration
-    mag = compass.field
+    acc = _accel.acceleration
+    mag = _compass.field
 
     if acc is None or None in acc:
         return None, None, None

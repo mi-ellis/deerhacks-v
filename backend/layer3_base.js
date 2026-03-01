@@ -47,14 +47,23 @@ const http     = require('http');
 const { Server } = require('socket.io');
 const crypto   = require('crypto');
 const fs       = require('fs');
+const path     = require('path');
+const { spawn } = require('child_process');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const PORT     = parseInt(process.env.L3_PORT || '8080', 10);
 const OWN_URL  = `http://localhost:${PORT}`;
 
-// Comma-separated list of L2 node URLs known at startup
-const SEED_L2_NODES = (process.env.L2_NODES || 'http://localhost:5000')
-    .split(',').map(s => s.trim()).filter(Boolean);
+// --config <file> — auto-run a network.config after the server boots
+const configArgIdx = process.argv.indexOf('--config');
+const STARTUP_CONFIG = configArgIdx !== -1 ? process.argv[configArgIdx + 1] : null;
+
+// Comma-separated list of L2 node URLs known at startup.
+// Only seed nodes if the L2_NODES env var is explicitly provided.
+// Without it, nodes must join through the Zero-Trust /register flow.
+const SEED_L2_NODES = process.env.L2_NODES
+    ? process.env.L2_NODES.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
 
 const PUSH_INTERVAL_MS      = 500;    // how often to broadcast to React clients
 const L2_HEARTBEAT_TTL_MS   = 9_000; // 3 missed beats → DEAD
@@ -89,6 +98,13 @@ app.use(express.json({ limit: '5mb' }));
  * }
  */
 const l2Nodes = new Map();
+
+/**
+ * Nodes waiting for admin approval (Zero-Trust join flow).
+ * Key: nodeId string
+ * Value: { nodeId, url, port, requestedAt }
+ */
+const pendingNodes = new Map();
 
 /**
  * Telemetry history.  Only VERIFIED data is stored here.
@@ -177,7 +193,8 @@ function buildGlobalShunnedSet() {
  * the accused — it remains ONLINE.  Only the shunned URL is COMPROMISED.
  */
 function nodeStatus(nodeEntry, globalShunnedUrls = new Set()) {
-    if (nodeEntry.status === 'DEAD') return 'DEAD';
+    // NOTE: Do NOT short-circuit on status==='DEAD' here — recovery is handled
+    // dynamically by computeNodeStatus based on lastSeen age and failCount.
 
     const health = nodeEntry.health;
     if (!health) return 'SYNCING';
@@ -314,6 +331,20 @@ function appendAuditEvent(event) {
 function buildTopology(globalShunnedUrls = buildGlobalShunnedSet()) {
     const nodes = [];
 
+    // Include nodes that are awaiting admin approval
+    for (const [, pending] of pendingNodes) {
+        nodes.push({
+            id:             pending.nodeId,
+            url:            pending.url,
+            status:         'PENDING',
+            peer:           null,
+            active_drivers: [],
+            devices:        [],
+            last_seen_ms:   pending.requestedAt,
+            fail_count:     0,
+        });
+    }
+
     for (const [, nodeEntry] of l2Nodes) {
         const health    = nodeEntry.health;
         const envelopes = nodeEntry.envelopes || {};
@@ -372,7 +403,9 @@ function buildTopology(globalShunnedUrls = buildGlobalShunnedSet()) {
  * they are the accusers, not the accused.
  */
 function computeNodeStatus(nodeEntry, globalShunnedUrls) {
-    if (nodeEntry.status === 'DEAD') return 'DEAD';
+    // A node is only DEAD if it has missed recent heartbeats AND polls are
+    // consistently failing.  Once it recovers (lastSeen fresh, failCount reset)
+    // it is allowed to transition back out of DEAD.
     const age = Date.now() - (nodeEntry.lastSeen || 0);
     if (age > L2_HEARTBEAT_TTL_MS && nodeEntry.failCount >= 2) return 'DEAD';
     return nodeStatus(nodeEntry, globalShunnedUrls);
@@ -419,12 +452,10 @@ async function pushCycle() {
         // Build global shunned set once from all fresh health reports
         const globalShunnedUrls = buildGlobalShunnedSet();
 
-        // Update node statuses
+        // Update node statuses — always recompute so a recovered node can
+        // transition back from DEAD when heartbeats/polls resume.
         for (const [, n] of l2Nodes) {
-            if (n.status !== 'DEAD') {
-                const s = computeNodeStatus(n, globalShunnedUrls);
-                if (s !== 'DEAD') n.status = s;
-            }
+            n.status = computeNodeStatus(n, globalShunnedUrls);
         }
 
         if (io.engine.clientsCount === 0) return; // no clients — skip serialization
@@ -470,6 +501,18 @@ app.post('/heartbeat', (req, res) => {
     const { node, url, timestamp, status } = req.body || {};
     if (!url) return res.status(400).json({ error: 'url required' });
 
+    // Block heartbeats from nodes that have not been approved yet.
+    // A pending node must wait for admin approval before it can participate.
+    const isPending = [...pendingNodes.values()].some(p => p.url === url);
+    if (isPending) {
+        return res.status(403).json({ error: 'Node is PENDING approval. Heartbeat rejected.' });
+    }
+
+    // Also block nodes that have never been registered at all.
+    if (!l2Nodes.has(url)) {
+        return res.status(403).json({ error: 'Node not registered. Use POST /register first.' });
+    }
+
     const entry = ensureNode(url, node);
     entry.lastSeen = Date.now();
     if (entry.status === 'DEAD' && status === 'ALIVE') {
@@ -477,8 +520,7 @@ app.post('/heartbeat', (req, res) => {
         entry.failCount = 0;
         console.log(`[L3] Node ${node || url} came back ALIVE`);
     }
-    res.json({ received: true, l3_timestamp: Math.floor(Date.now() / 1000) });
-});
+    res.json({ received: true, l3_timestamp: Math.floor(Date.now() / 1000) });});
 
 // Manually register an L2 node (used by layer3_sender.js config scripts)
 app.post('/register-node', (req, res) => {
@@ -486,6 +528,58 @@ app.post('/register-node', (req, res) => {
     if (!url) return res.status(400).json({ error: 'url required' });
     ensureNode(url, name);
     res.json({ ok: true, node: name, url });
+});
+
+// ─── Zero-Trust Join Request ───────────────────────────────────────────────────
+// L2 nodes call this on startup when started with a L3 target URL.
+// The node is placed in PENDING state and shown on the dashboard as gray
+// until an admin approves or denies it.
+app.post('/register', (req, res) => {
+    const { nodeId, port, url, status } = req.body || {};
+    if (!nodeId || !url) return res.status(400).json({ error: 'nodeId and url required' });
+
+    // If already fully registered (approved), do not demote it back to PENDING
+    if (l2Nodes.has(url)) {
+        return res.json({ ok: true, status: 'ALREADY_REGISTERED' });
+    }
+
+    if (!pendingNodes.has(nodeId)) {
+        pendingNodes.set(nodeId, { nodeId, port, url, requestedAt: Date.now() });
+        console.log(`[L3] Join request from node "${nodeId}" at ${url} — awaiting admin approval.`);
+        // Push an immediate topology update so the dashboard shows the gray node.
+        io.emit('topology', buildTopology());
+    }
+
+    res.json({ ok: true, status: 'PENDING' });
+});
+
+// ─── Admin Approve / Deny ─────────────────────────────────────────────────────
+// The React dashboard calls this when the admin clicks Approve or Deny.
+app.post('/approve-node', (req, res) => {
+    const { nodeId, approved } = req.body || {};
+    if (!nodeId || typeof approved !== 'boolean') {
+        return res.status(400).json({ error: 'nodeId and approved (boolean) required' });
+    }
+
+    const pending = pendingNodes.get(nodeId);
+    if (!pending) {
+        return res.status(404).json({ error: `No pending join request for nodeId "${nodeId}"` });
+    }
+
+    pendingNodes.delete(nodeId);
+
+    if (approved) {
+        // Promote the node to a full L2 participant.
+        ensureNode(pending.url, nodeId);
+        console.log(`[L3] Node "${nodeId}" approved. Registered at ${pending.url}.`);
+        io.emit('topology', buildTopology());
+        res.json({ ok: true, status: 'APPROVED', nodeId });
+    } else {
+        // Denied — remove from the map (already done above) and notify dashboard.
+        console.log(`[L3] Node "${nodeId}" denied. Join request discarded.`);
+        io.emit('topology', buildTopology());
+        res.json({ ok: true, status: 'DENIED', nodeId });
+    }
 });
 
 // Snapshot endpoints (for debugging without a WS client)
@@ -522,10 +616,51 @@ server.listen(PORT, () => {
     console.log(`  Silent Filter Rule: ACTIVE`);
     console.log(`  Heartbeat TTL: ${L2_HEARTBEAT_TTL_MS}ms`);
     console.log(`  Seeded L2 nodes: ${SEED_L2_NODES.join(', ')}`);
+    if (STARTUP_CONFIG) console.log(`  Startup config:   ${STARTUP_CONFIG}`);
     console.log(`${'─'.repeat(62)}\n`);
 
     // Main push loop
     setInterval(() => pushCycle().catch(err => console.error('[L3] Push cycle error:', err.message)), PUSH_INTERVAL_MS);
+
+    // Auto-run network.config if --config was passed.
+    // Wait 1 s so the HTTP server is fully ready before layer3_sender hits it.
+    if (STARTUP_CONFIG) {
+        const absConfig = path.resolve(STARTUP_CONFIG);
+
+        function spawnConfig(resend) {
+            const extraArgs = resend ? ['--resend'] : [];
+            const label = resend ? 'resend' : 'startup';
+            console.log(`[L3] Running ${label} config: ${absConfig}`);
+            const senderPath = path.join(__dirname, 'layer3_sender.js');
+            const child = spawn(
+                process.execPath,
+                [senderPath, 'run-config', absConfig, ...extraArgs],
+                { stdio: 'inherit', env: { ...process.env }, cwd: __dirname },
+            );
+            child.on('error', (err) => console.error(`[L3] Config runner error: ${err.message}`));
+            child.on('exit',  (code) => {
+                if (code !== 0) console.error(`[L3] Config runner (${label}) exited with code ${code}`);
+                else            console.log(`[L3] Config runner (${label}) complete.`);
+            });
+        }
+
+        // Initial full run (with Solana anchoring + node gossip)
+        setTimeout(() => spawnConfig(false), 1000);
+
+        // Periodic resend — re-push drivers/devices every 30 s so nodes that
+        // come online after the initial run still receive their drivers.
+        // Skips Solana anchoring and node-gossip (--resend mode).
+        // Only fires if at least one L2 node is currently reachable (not DEAD)
+        // to avoid pointless log spam when all nodes are offline.
+        const RESEND_INTERVAL_MS = 30_000;
+        setInterval(() => {
+            const anyAlive = [...l2Nodes.values()].some(
+                (n) => n.status !== 'DEAD' && n.failCount < 3,
+            );
+            if (anyAlive) spawnConfig(true);
+            else console.log('[L3] Resend skipped — no reachable L2 nodes yet.');
+        }, RESEND_INTERVAL_MS);
+    }
 });
 
 /**

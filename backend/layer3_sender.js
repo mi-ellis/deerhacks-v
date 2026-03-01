@@ -45,6 +45,14 @@ async function postDriverHash(type, version, hash) {
 // Maps node name → node URL.  Used to target HTTP commands correctly.
 const sessionPeers = new Map();
 
+// L3 aggregator URL — needed to pre-register nodes so L3 accepts their heartbeats.
+const L3_URL = process.env.L3_URL || 'http://localhost:8080';
+
+// --resend mode: skip Solana anchoring and L2 mesh gossip, but still
+// register nodes with L3 (so heartbeats are accepted) and push drivers/devices.
+const RESEND_MODE = process.argv.includes('--resend');
+if (RESEND_MODE) console.log('[sender] --resend mode: skipping Solana + L2 gossip, re-registering with L3');
+
 function bootstrapUrl() {
     const first = sessionPeers.values().next().value;
     return first || process.env.L2_BOOTSTRAP || 'http://localhost:5000';
@@ -78,6 +86,11 @@ async function httpPost(url, body, label) {
 async function registerNode(name, url) {
     console.log(`Announcing node "${name}" at ${url} to mesh...`);
 
+    // Always tell L3 about this node so it pre-registers it and accepts
+    // the node's heartbeats.  This must happen before the node tries to
+    // send its first heartbeat, otherwise L3 rejects it with 403.
+    await httpPost(`${L3_URL}/register-node`, { name, url }, `L3 register ${name}`);
+
     // Tell every already-known node about the newcomer
     for (const [, peerUrl] of sessionPeers) {
         await httpPost(`${peerUrl}/gossip/peer`, { name, url },
@@ -109,16 +122,34 @@ async function pushDriver(type, version, scriptOrFile, targetUrl = null) {
     }
     const hash       = sha256(script);
     const compressed = compress(script);
-    const dest       = targetUrl || bootstrapUrl();
 
-    console.log(`  Pushing "${type}" v${version} → ${dest} (${script.length}B raw / ${compressed.length}B compressed)`);
-    const ok = await httpPost(`${dest}/driver`,
-        { type, version, script: compressed, gz: true, hash },
-        `driver push`);
+    // Determine destination(s):
+    //   - If a specific targetUrl is given, use only that.
+    //   - Otherwise fan out to EVERY known session peer so all nodes receive
+    //     the driver even when gossip is unavailable (e.g. nodes are isolated).
+    const targets = targetUrl
+        ? [targetUrl]
+        : (sessionPeers.size > 0 ? [...sessionPeers.values()] : [bootstrapUrl()]);
 
-    if (ok) {
-        console.log(`  Delivered. Anchoring hash on Solana...`);
-        await postDriverHash(type, version, hash);
+    let anchored = false;
+    for (const dest of targets) {
+        console.log(`  Pushing "${type}" v${version} → ${dest} (${script.length}B raw / ${compressed.length}B compressed)`);
+        const ok = await httpPost(`${dest}/driver`,
+            { type, version, script: compressed, gz: true, hash },
+            `driver push`);
+
+        if (ok) {
+            if (RESEND_MODE) {
+                console.log(`  Delivered to ${dest} (Solana skipped in resend mode).`);
+            } else if (!anchored) {
+                // Only anchor once per driver push, regardless of how many nodes
+                console.log(`  Delivered. Anchoring hash on Solana...`);
+                await postDriverHash(type, version, hash);
+                anchored = true;
+            } else {
+                console.log(`  Delivered to ${dest} (hash already anchored).`);
+            }
+        }
     }
 }
 
@@ -285,7 +316,18 @@ async function runConfig(configPath) {
         if (verb === 'register') {
             if (noun === 'node') {
                 const [name, port] = rest;
-                await registerNode(name, `http://localhost:${port}`);
+                if (RESEND_MODE) {
+                    // In resend mode skip L2 mesh gossip, but still register
+                    // with L3 so it accepts the node's heartbeats if it restarted.
+                    sessionPeers.set(name, `http://localhost:${port}`);
+                    await httpPost(
+                        `${L3_URL}/register-node`,
+                        { name, url: `http://localhost:${port}` },
+                        `L3 re-register ${name}`,
+                    );
+                } else {
+                    await registerNode(name, `http://localhost:${port}`);
+                }
 
             } else if (noun === 'driver') {
                 const [type, fileArg] = rest;

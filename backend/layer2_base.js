@@ -58,6 +58,9 @@ app.use(express.json({ limit: '20mb' }));
 // ─── CLI args ────────────────────────────────────────────────────────────────
 const _arg1 = process.argv[2];
 const _arg2 = process.argv[3];
+// Optional 4th argument: L3 gateway URL to send a join request on startup.
+// Usage: node layer2_base.js A 5000 http://192.168.1.10:8080
+const _arg3 = process.argv[4] || null;
 let NODE_NAME, PORT;
 if (!_arg1) {
     NODE_NAME = 'DEFAULT'; PORT = 5000;
@@ -69,6 +72,9 @@ if (!_arg1) {
 
 const BOOTSTRAP_URL  = process.env.L2_BOOTSTRAP || null;
 const L3_URL         = process.env.L3_URL || null;       // optional upstream aggregator
+// L3 gateway to request approval from before participating in the mesh.
+// Set via CLI arg 4 or env var L3_JOIN_URL.
+const L3_JOIN_TARGET = _arg3 || process.env.L3_JOIN_URL || null;
 const DISCOVERY_PORT = 5099;
 const OWN_URL        = `http://localhost:${PORT}`;
 
@@ -223,6 +229,11 @@ const pendingPeerClaims = new Map();
 // ── A. PASS-THROUGH / PROCESSED envelopes ─────────────────────────────────────
 // latest envelope per device — polled by L3
 const latestEnvelopes = new Map();   // deviceId → envelope
+
+// Tracks the last frameHash processed per device (for deduplication).
+// Prevents the same JPEG frame from being re-analysed when the L1 webcam
+// reads the same buffer twice — which would flip MOTION → NO_MOTION (diff=0).
+const lastFrameHashPerDevice = new Map(); // deviceId → frameHash string
 
 // ── Device heartbeat tracking ─────────────────────────────────────────────────
 // Populated by POST /heartbeat from L1 devices.
@@ -571,7 +582,15 @@ app.get('/health', (req, res) => {
         drivers:        Object.entries(driverRegistry).map(([type, d]) => ({
             type, version: d.version, hash: d.hash.slice(0, 8) + '...',
         })),
-        devices:        deviceRegistry,
+        devices:        (function () {
+            // Merge heartbeat-only devices so that L3 sees any device that
+            // has sent data or a heartbeat, even if /device was never called.
+            const merged = { ...deviceRegistry };
+            for (const [id, hb] of deviceHeartbeats) {
+                if (!merged[id] && hb.type && hb.type !== 'UNKNOWN') merged[id] = hb.type;
+            }
+            return merged;
+        }()),
         device_liveness: getDeviceLiveness(),
         status:         'UP',
         timestamp:      Math.floor(Date.now() / 1000),
@@ -819,6 +838,18 @@ app.post('/data', async (req, res) => {
         payload.type = deviceRegistry[payload.id];
     }
 
+    // Treat incoming data as proof-of-liveness: update heartbeat timestamp so
+    // the device isn't marked DEAD by getDeviceLiveness() while actively sending.
+    if (payload.id) {
+        const prev = deviceHeartbeats.get(payload.id);
+        deviceHeartbeats.set(payload.id, {
+            lastSeen: Date.now(),
+            type:   payload.type || (prev && prev.type) || 'UNKNOWN',
+            status: 'ALIVE',
+        });
+        if (payload.type && !deviceRegistry[payload.id]) deviceRegistry[payload.id] = payload.type;
+    }
+
     // Verify device HMAC
     let hmacStatus = 'NOT_CHECKED';
     if (payload.signature && payload.publicKey && payload.id && payload.timestamp) {
@@ -860,6 +891,29 @@ app.post('/data', async (req, res) => {
 app.post('/frame', async (req, res) => {
     const { id, type, frame, frameHash, timestamp, signature, publicKey } = req.body;
     if (!id || !frame || !frameHash) return res.sendStatus(400);
+
+    // Treat incoming frame as proof-of-liveness
+    if (id) {
+        const prev = deviceHeartbeats.get(id);
+        deviceHeartbeats.set(id, {
+            lastSeen: Date.now(),
+            type:   type || (prev && prev.type) || 'WEBCAM',
+            status: 'ALIVE',
+        });
+    }
+
+    // Deduplicate: if this exact frame was already processed, return the cached
+    // envelope immediately.  This prevents the L1 webcam re-reading the same
+    // buffer frame from triggering a second analysis pass where diff=0 → NO_MOTION
+    // immediately overwrites the MOTION result we just produced.
+    if (lastFrameHashPerDevice.get(id) === frameHash) {
+        const cached = latestEnvelopes.get(id);
+        if (cached) {
+            console.log(`[${NODE_NAME}] FRAME ${id} dup frameHash — returning cached result (${cached.payload?.interpretation?.status ?? 'UNKNOWN'})`);
+            return res.json(cached);
+        }
+    }
+    lastFrameHashPerDevice.set(id, frameHash);
 
     if (type) deviceRegistry[id] = type;
     const resolvedType = deviceRegistry[id] || type;
@@ -1030,6 +1084,37 @@ async function joinMesh() {
     }
 }
 
+// ─── L3 Zero-Trust join request ─────────────────────────────────────────────
+/**
+ * Send a join request to the L3 gateway, setting this node as PENDING.
+ * The gateway operator must approve the node before it appears as ONLINE.
+ * If no L3_JOIN_TARGET is configured this function is a no-op.
+ */
+async function requestToJoin() {
+    if (!L3_JOIN_TARGET) return;
+    console.log(`[${NODE_NAME}] Sending join request to L3 gateway ${L3_JOIN_TARGET} ...`);
+    try {
+        const res = await fetch(`${L3_JOIN_TARGET}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nodeId: NODE_NAME,
+                port:   PORT,
+                url:    OWN_URL,
+                status: 'PENDING',
+            }),
+            signal: AbortSignal.timeout(6000),
+        });
+        if (res.ok) {
+            console.log(`[${NODE_NAME}] Join request accepted. Awaiting admin approval on the dashboard.`);
+        } else {
+            console.error(`[${NODE_NAME}] L3 gateway returned HTTP ${res.status} for join request.`);
+        }
+    } catch (e) {
+        console.error(`[${NODE_NAME}] Could not reach L3 gateway at ${L3_JOIN_TARGET}: ${e.message}`);
+    }
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 async function init() {
     loadOrCreateNodeKey();
@@ -1040,7 +1125,14 @@ async function init() {
         console.log(`  Layer 2 Base Node [${NODE_NAME}]  port=${PORT}`);
         console.log(`  A. Pass-Through  B. Gossip Auditor  C. State Anchor`);
         console.log(`  Local Shun List active — peers are isolated immediately.`);
+        if (L3_JOIN_TARGET) {
+            console.log(`  Zero-Trust mode: will request approval from ${L3_JOIN_TARGET}`);
+        }
         console.log(`${'─'.repeat(62)}\n`);
+
+        // Send join request first — node appears PENDING on the dashboard
+        // until the admin approves it.
+        await requestToJoin();
 
         await joinMesh();
 

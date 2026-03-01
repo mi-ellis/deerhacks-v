@@ -24,5 +24,70 @@
     "ownStatus": "UNKNOWN",
     "reportedStatus": "NO_MOTION",
     "verdict": "Peer reported NO_MOTION — cross-validation returned UNKNOWN"
+  },
+  {
+    "detectedAt": "2026-03-01T05:30:32.631Z",
+    "kind": "ANALYSIS_CONFLICT",
+    "accusingNode": "A",
+    "lyingPeer": "B",
+    "lyingPeerUrl": "http://localhost:5001",
+    "deviceId": "WEBCAM_01",
+    "frameHash": "a5d2b8b66ddf38bd6ae3f3493465bcf69893f485ce9a0425736afa7388405e66",
+    "timestamp": 1772343032,
+    "ownStatus": "MOTION",
+    "reportedStatus": "NO_MOTION",
+    "verdict": "Peer reported NO_MOTION — cross-validation returned MOTION"
+  },
+  {
+    "detectedAt": "2026-03-01T05:41:44.887Z",
+    "kind": "ANALYSIS_CONFLICT",
+    "accusingNode": "A",
+    "lyingPeer": "B",
+    "lyingPeerUrl": "http://localhost:5001",
+    "deviceId": "WEBCAM_01",
+    "frameHash": "abdf290412598880d3b9f07622364db7a60e8e0441c5424af2c60aa0136775c3",
+    "timestamp": 1772343704,
+    "ownStatus": "UNKNOWN",
+    "reportedStatus": "NO_MOTION",
+    "verdict": "Peer reported NO_MOTION — cross-validation returned UNKNOWN"
+  },
+  {
+    "detectedAt": "2026-03-01T05:45:53.815Z",
+    "kind": "RETROACTIVE_ANALYSIS_CONFLICT",
+    "accusingNode": "A",
+    "lyingPeer": "B",
+    "lyingPeerUrl": "http://localhost:5001",
+    "deviceId": "WEBCAM_01",
+    "frameHash": "af8238c7b1c33d758bc95d3fb7035bb96e34a68bd29bd662e76754993dcf5629",
+    "timestamp": 1772343953,
+    "ownStatus": "LOOP_DETECTION",
+    "reportedStatus": "NO_MOTION",
+    "verdict": "B pre-gossiped NO_MOTION — we later got LOOP_DETECTION"
+  },
+  {
+    "detectedAt": "2026-03-01T06:03:59.604Z",
+    "kind": "ANALYSIS_CONFLICT",
+    "accusingNode": "A",
+    "lyingPeer": "B",
+    "lyingPeerUrl": "http://localhost:5001",
+    "deviceId": "WEBCAM_01",
+    "frameHash": "1b95293cc4c9cc3572d073e45228d41329f6964d6834b8bc771b3b9d7d80c927",
+    "timestamp": 1772345039,
+    "ownStatus": "MOTION",
+    "reportedStatus": "NO_MOTION",
+    "verdict": "Peer reported NO_MOTION — cross-validation returned MOTION"
+  },
+  {
+    "detectedAt": "2026-03-01T06:49:10.109Z",
+    "kind": "RETROACTIVE_ANALYSIS_CONFLICT",
+    "accusingNode": "A",
+    "lyingPeer": "B",
+    "lyingPeerUrl": "http://localhost:5001",
+    "deviceId": "WEBCAM_01",
+    "frameHash": "29f2a6797bc2a206dc5965a2445999a53ee9c67f7f4e54806d31a1d446db916e",
+    "timestamp": 1772347749,
+    "ownStatus": "MOTION",
+    "reportedStatus": "NO_MOTION",
+    "verdict": "B pre-gossiped NO_MOTION — we later got MOTION"
   }
 ]

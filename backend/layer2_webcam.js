@@ -173,6 +173,13 @@ const analysisCache = new Map();
 // Key: "<deviceId>:<frameHash>"  Value: [{ fromUrl, fromName, reportedStatus, signature, publicKey, timestamp }]
 // When our own analysis arrives we retroactively compare and catch any lie.
 const pendingPeerClaims = new Map();
+// Envelope store — polled by L3 aggregator at GET /latest
+const latestEnvelopes       = new Map();  // deviceId → envelope
+const lastFrameHashPerDevice = new Map(); // deviceId → frameHash (for frame dedup)
+// L1 device heartbeat tracking
+const deviceHeartbeats = new Map();       // id → { lastSeen, type, status }
+const L1_HEARTBEAT_TTL_MS = 9_000;       // 3 × HEARTBEAT_INTERVAL → DEAD
+let   lastSolanaBatchId = null;           // most recent Solana batch TX sig
 // MJPEG video state
 const latestFrames  = new Map();  // deviceId → Buffer (latest annotated JPEG)
 const mjpegClients  = new Map();  // deviceId → Set<res>  (subscribed SSE clients)
@@ -182,20 +189,54 @@ data = json.load(sys.stdin)
 print(f"[default] {data.get('id','?')} raw={data['value']} type={data.get('type','?')}")
 `.trim();
 
+// ─── Envelope builder ─────────────────────────────────────────────────────────
+// Produces a standardised envelope matching the L3 schema.
+function buildEnvelope(deviceId, rawData, driverStatus, interpretation, peerConsistency, solanaBatchId) {
+    return {
+        header:  { node_id: NODE_NAME, timestamp: Math.floor(Date.now() / 1000) },
+        payload: { device_id: deviceId, raw_data: rawData, driver_status: driverStatus, interpretation: interpretation ?? null },
+        audit:   { peer_consistency: peerConsistency, solana_batch_id: solanaBatchId ?? null },
+    };
+}
+
+// ─── Device liveness helper ────────────────────────────────────────────────────
+function getDeviceLiveness() {
+    const now = Date.now();
+    const liveness = {};
+    for (const [id, type] of Object.entries(deviceRegistry)) {
+        const hb = deviceHeartbeats.get(id);
+        if (!hb) {
+            liveness[id] = { type, status: 'WARMING_UP', lastSeen: null };
+        } else {
+            const age = now - hb.lastSeen;
+            liveness[id] = { type, status: age > L1_HEARTBEAT_TTL_MS ? 'DEAD' : 'ALIVE', lastSeenMs: hb.lastSeen, ageMs: age };
+        }
+    }
+    for (const [id, hb] of deviceHeartbeats) {
+        if (!liveness[id]) {
+            const age = now - hb.lastSeen;
+            liveness[id] = { type: hb.type, status: age > L1_HEARTBEAT_TTL_MS ? 'DEAD' : 'ALIVE', lastSeenMs: hb.lastSeen, ageMs: age };
+        }
+    }
+    return liveness;
+}
+
 // ─── Python driver execution ───────────────────────────────────────────────────
 function runPythonDriver(data) {
     const type   = data.type || null;
     const entry  = type ? driverRegistry[type] : null;
     const script = entry ? entry.script : defaultScript;
+    const loaded = Boolean(entry);
     if (type && !entry) console.log(`[${NODE_NAME}] No driver for "${type}", using default.`);
     return new Promise((resolve) => {
         const proc = spawn('python3', ['-c', script]);
         let stdout = '', stderr = '';
         proc.stdout.on('data', c => { stdout += c.toString(); });
         proc.stderr.on('data', c => { stderr += c.toString(); });
-        proc.on('close', code => resolve(
-            code !== 0 ? `Script error (exit ${code}): ${stderr.trim()}` : stdout.trim()
-        ));
+        proc.on('close', code => resolve({
+            output:       code !== 0 ? `Script error (exit ${code}): ${stderr.trim()}` : stdout.trim(),
+            driverLoaded: loaded,
+        }));
         proc.stdin.write(JSON.stringify(data));
         proc.stdin.end();
     });
@@ -444,19 +485,48 @@ async function gossipDriverToAll(driverPayload, exceptUrl = null) {
 
 // Health / status
 app.get('/health', (req, res) => {
+    // Merge heartbeat-only devices so L3 sees any device actively sending data
+    const mergedDevices = { ...deviceRegistry };
+    for (const [id, hb] of deviceHeartbeats) {
+        if (!mergedDevices[id] && hb.type && hb.type !== 'UNKNOWN') mergedDevices[id] = hb.type;
+    }
     res.json({
-        node:         NODE_NAME,
-        port:         PORT,
-        url:          OWN_URL,
-        peers:        peers.map(p => ({ name: p.name, url: p.url })),
-        drivers:      Object.entries(driverRegistry).map(([type, d]) => ({
+        node:            NODE_NAME,
+        port:            PORT,
+        url:             OWN_URL,
+        peers:           peers.map(p => ({ name: p.name, url: p.url })),
+        drivers:         Object.entries(driverRegistry).map(([type, d]) => ({
             type, version: d.version, hash: d.hash.slice(0, 8) + '...',
         })),
-        devices:      deviceRegistry,
-        status:       'UP',
-        shunnedPeers: [...shunnedPeers],
-        fraudLog:     fraudLog.slice(-10),   // last 10 fraud events
+        devices:         mergedDevices,
+        device_liveness: getDeviceLiveness(),
+        status:          'UP',
+        shunnedPeers:    [...shunnedPeers],
+        fraudLog:        fraudLog.slice(-10),
     });
+});
+
+// L1 device heartbeat — keeps device liveness alive
+app.post('/heartbeat', (req, res) => {
+    const { id, type, status } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const prev = deviceHeartbeats.get(id);
+    deviceHeartbeats.set(id, { lastSeen: Date.now(), type: type || (prev && prev.type) || 'UNKNOWN', status: status || 'ALIVE' });
+    if (type && !deviceRegistry[id]) deviceRegistry[id] = type;
+    res.json({ node: NODE_NAME, received: true, timestamp: Math.floor(Date.now() / 1000) });
+});
+
+// Envelope store — polled by L3 aggregator for telemetry
+app.get('/latest', (req, res) => {
+    const all = {};
+    for (const [id, env] of latestEnvelopes) all[id] = env;
+    res.json({ node: NODE_NAME, envelopes: all });
+});
+
+app.get('/latest/:deviceId', (req, res) => {
+    const env = latestEnvelopes.get(req.params.deviceId);
+    if (!env) return res.status(404).json({ error: 'No data yet for this device.' });
+    res.json(env);
 });
 
 // Peer list (used by L1 discovery fallback and new nodes on join)
@@ -629,20 +699,47 @@ app.post('/data', async (req, res) => {
         payload.type = deviceRegistry[payload.id];
     }
 
+    // Proof-of-liveness: treat incoming data as a heartbeat
+    if (payload.id) {
+        const prev = deviceHeartbeats.get(payload.id);
+        deviceHeartbeats.set(payload.id, {
+            lastSeen: Date.now(),
+            type:   payload.type || (prev && prev.type) || 'UNKNOWN',
+            status: 'ALIVE',
+        });
+        if (payload.type && !deviceRegistry[payload.id]) deviceRegistry[payload.id] = payload.type;
+    }
+
     // Verify HMAC-SHA256 tag if present (L1 always signs with hashlib hmac)
+    let hmacStatus = 'NOT_CHECKED';
     if (payload.signature && payload.publicKey && payload.id && payload.timestamp) {
         const ok = verifyHMAC(payload.id, payload.value, payload.timestamp,
                                payload.signature, payload.publicKey);
-        if (ok) {
-            console.log(`[${NODE_NAME}] HMAC valid | ${payload.id} value=${payload.value}`);
-        } else {
-            console.warn(`[${NODE_NAME}] HMAC INVALID for ${payload.id} value=${payload.value} — possible replay/tamper`);
-        }
+        hmacStatus = ok ? 'VALID' : 'INVALID';
+        if (ok) console.log(`[${NODE_NAME}] HMAC valid | ${payload.id} value=${payload.value}`);
+        else    console.warn(`[${NODE_NAME}] HMAC INVALID for ${payload.id} value=${payload.value} — possible replay/tamper`);
     }
 
-    const interpreted = await runPythonDriver(payload);
-    console.log(`[${NODE_NAME}] ${payload.id || '?'} → ${interpreted}`);
-    res.sendStatus(200);
+    const { output, driverLoaded } = await runPythonDriver(payload);
+
+    let interpretation = null;
+    if (driverLoaded) {
+        try { interpretation = JSON.parse(output); } catch { interpretation = { text: output }; }
+    }
+    const driverStatus = driverLoaded ? 'PROCESSED' : 'NOT_LOADED';
+
+    const envelope = buildEnvelope(
+        payload.id,
+        { value: payload.value, hmac: hmacStatus },
+        driverStatus,
+        interpretation,
+        'PENDING',
+        lastSolanaBatchId,
+    );
+    latestEnvelopes.set(payload.id, envelope);
+
+    console.log(`[${NODE_NAME}] ${payload.id || '?'} → ${output}`);
+    res.json(envelope);
 });
 
 // ── Fraud log inspection ───────────────────────────────────────────────────────
@@ -775,6 +872,26 @@ app.post('/frame', async (req, res) => {
     const { id, type, frame, frameHash, timestamp, signature, publicKey } = req.body;
     if (!id || !frame || !frameHash) return res.sendStatus(400);
 
+    // Proof-of-liveness for the webcam device
+    if (id) {
+        const prev = deviceHeartbeats.get(id);
+        deviceHeartbeats.set(id, {
+            lastSeen: Date.now(),
+            type:   type || (prev && prev.type) || 'WEBCAM',
+            status: 'ALIVE',
+        });
+    }
+
+    // Deduplicate: skip re-analysis of the same frame to prevent diff=0 → NO_MOTION overwrite
+    if (lastFrameHashPerDevice.get(id) === frameHash) {
+        const cached = latestEnvelopes.get(id);
+        if (cached) {
+            console.log(`[${NODE_NAME}] FRAME ${id} dup — returning cached (${cached.payload?.interpretation?.status ?? 'UNKNOWN'})`);
+            return res.json(cached);
+        }
+    }
+    lastFrameHashPerDevice.set(id, frameHash);
+
     // Register / update device type
     if (type) deviceRegistry[id] = type;
     const resolvedType = deviceRegistry[id] || type;
@@ -874,7 +991,19 @@ app.post('/frame', async (req, res) => {
     // This avoids hitting the devnet RPC rate limit at ~10 fps.
     enqueueAnalysis({ deviceId: id, frameHash, timestamp, status: ownStatus });
 
-    res.sendStatus(200);
+    // Build and store a standardised envelope so L3 can poll /latest for telemetry
+    const driverStatus = ownStatus !== 'UNKNOWN' ? 'PROCESSED' : 'NOT_LOADED';
+    const envelope = buildEnvelope(
+        id,
+        { frameHash, timestamp },
+        driverStatus,
+        driverStatus === 'PROCESSED' ? ownMeta : null,
+        'PENDING',
+        lastSolanaBatchId,
+    );
+    latestEnvelopes.set(id, envelope);
+
+    res.json(envelope);
 });
 
 // ── Video: MJPEG live stream ────────────────────────────────────────────────────────────────────

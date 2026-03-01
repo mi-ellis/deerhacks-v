@@ -19,5 +19,5 @@ elif val <= 5000:
 else:
     r = {"status": "EXTREME_LIGHT", "level": "CRITICAL", "lux_raw": val, "is_healthy": True, "msg": "Direct sunlight"}
 
-print(f"[{dev}] {r['status']} (lux={val}) — {r['msg']}")
+print(f"[{dev}] {r['status']} (lux={val}) — {r['msg']}", file=sys.stderr)
 print(json.dumps(r))

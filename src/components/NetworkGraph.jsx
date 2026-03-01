@@ -1,14 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  Component,
-} from "react";
+import { useCallback, useEffect, useRef, useState, Component } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import topologyData from "./topology_sample.json";
 import { resolveColor, resolveRadius } from "./graphUtils";
+
+const L3_BASE_URL = process.env.REACT_APP_L3_URL || "http://localhost:8080";
 
 // ── Error boundary — surfaces runtime crashes visibly ──────────────────────────
 class ErrorBoundary extends Component {
@@ -73,6 +68,8 @@ function buildGraphData(topology) {
   });
 
   const peerLinkKeys = new Set();
+  // Track physical device IDs to avoid duplicating dual-homed devices
+  const seenDeviceIds = new Set();
 
   for (const l2 of topology.nodes) {
     // L2 node
@@ -85,8 +82,11 @@ function buildGraphData(topology) {
     // L3 → L2 hierarchy link
     links.push({ source: L3_ID, target: l2.id, linkType: "parent" });
 
-    // L2 → each device
+    // L2 → each device (skip duplicates — dual-homed devices report to
+    // multiple L2 nodes, but should only appear once in the graph)
     for (const dev of l2.devices ?? []) {
+      if (seenDeviceIds.has(dev.id)) continue;
+      seenDeviceIds.add(dev.id);
       const devId = `${l2.id}::${dev.id}`;
       nodes.push({
         ...dev,
@@ -117,11 +117,119 @@ function NetworkGraphInner({ onNodeSelect, isDarkMode }) {
   const fgRef = useRef(null);
   const wrapRef = useRef(null);
   const hoveredRef = useRef(null);
+  // Persists node positions (fx/fy) across topology rebuilds so existing nodes
+  // don't jump when a new node is added.
+  const posCache = useRef(new Map());
   const [dims, setDims] = useState({ width: 800, height: 600 });
   const [hoveredNode, setHoveredNode] = useState(null);
   const [pinnedNode, setPinnedNode] = useState(null);
 
-  const graphData = useMemo(() => buildGraphData(topologyData), []);
+  // Live topology from L3 — starts empty; falls back to static sample only if
+  // L3 is unreachable on the very first poll.
+  const [topology, setTopology] = useState({ nodes: [] });
+  const lastTopologyJson = useRef("");
+  const hasLiveData = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    async function poll() {
+      try {
+        const res = await fetch(`${L3_BASE_URL}/topology`, {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        hasLiveData.current = true;
+        const json = JSON.stringify(data);
+        if (!active || json === lastTopologyJson.current) return;
+        lastTopologyJson.current = json;
+        setTopology(data);
+      } catch {
+        // L3 unreachable — fall back to sample data on first failure only
+        if (!active) return;
+        if (!hasLiveData.current && lastTopologyJson.current === "") {
+          lastTopologyJson.current = "fallback";
+          setTopology(topologyData);
+        }
+      }
+    }
+    poll();
+    const id = setInterval(poll, 2000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Stable graphData — only rebuilt when structure (node ids / link count)
+  // actually changes.  Status-only updates are patched in-place so D3 never
+  // sees new node objects and therefore never disturbs positions.
+  const [graphData, setGraphData] = useState(() =>
+    buildGraphData({ nodes: [] }),
+  );
+  const graphDataRef = useRef(graphData);
+
+  useEffect(() => {
+    const newData = buildGraphData(topology);
+    const prev = graphDataRef.current;
+
+    // Compute a cheap structural fingerprint
+    const prevIds = new Set(prev.nodes.map((n) => n.id));
+    const newIds = new Set(newData.nodes.map((n) => n.id));
+    const structureChanged =
+      newData.nodes.length !== prev.nodes.length ||
+      newData.links.length !== prev.links.length ||
+      newData.nodes.some((n) => !prevIds.has(n.id)) ||
+      prev.nodes.some((n) => !newIds.has(n.id));
+
+    if (structureChanged) {
+      // Full rebuild — restore pinned positions from cache for existing nodes
+      newData.nodes.forEach((n) => {
+        const cached = posCache.current.get(n.id);
+        if (cached) {
+          n.fx = cached.fx;
+          n.fy = cached.fy;
+        }
+      });
+      graphDataRef.current = newData;
+      setGraphData(newData);
+    } else {
+      // Status-only update: mutate node objects that D3 already tracks.
+      // This preserves identity so the simulation is never disturbed.
+      // Do NOT call setGraphData — the canvas redraws every animation frame
+      // and will pick up the mutated .status/.devices etc. automatically.
+      // Calling setGraphData with a new wrapper object (even with the same
+      // nodes array) triggers ForceGraph2D to notify D3, which re-engages
+      // the center force and causes nodes to drift.
+      const nodeById = new Map(prev.nodes.map((n) => [n.id, n]));
+      for (const fresh of newData.nodes) {
+        const ex = nodeById.get(fresh.id);
+        if (!ex) continue;
+        ex.status = fresh.status;
+        ex.heartbeat = fresh.heartbeat;
+        ex.heartbeat_age_s = fresh.heartbeat_age_s;
+        ex.fail_count = fresh.fail_count;
+        ex.last_seen_ms = fresh.last_seen_ms;
+        ex.active_drivers = fresh.active_drivers;
+        ex.devices = fresh.devices;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topology]);
+
+  // Reheat the force simulation whenever new nodes/links arrive so they
+  // spread out rather than piling up at the origin.
+  const prevNodeCount = useRef(0);
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    if (graphData.nodes.length !== prevNodeCount.current) {
+      prevNodeCount.current = graphData.nodes.length;
+      try {
+        fg.d3ReheatSimulation();
+      } catch (_) {}
+    }
+  }, [graphData]);
 
   // Track container size so ForceGraph2D always gets real pixel dimensions
   useEffect(() => {
@@ -153,19 +261,34 @@ function NetworkGraphInner({ onNodeSelect, isDarkMode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Zoom to fit after the simulation cools down
+  // Zoom to fit after the simulation cools down, then pin all nodes so
+  // they stop drifting once the layout has settled.
   const onEngineStop = useCallback(() => {
-    fgRef.current?.zoomToFit(500, 80);
+    const fg = fgRef.current;
+    if (!fg) return;
+    fg.zoomToFit(500, 80);
+    // Pin every node to its current position and persist to the cache so
+    // positions survive topology refreshes.
+    // Use graphDataRef (our own state) — the ForceGraph2D ref does not expose
+    // a graphData() method in this version of the library.
+    graphDataRef.current.nodes.forEach((node) => {
+      if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+      node.fx = node.x;
+      node.fy = node.y;
+      posCache.current.set(node.id, { fx: node.x, fy: node.y });
+    });
   }, []);
 
   // ── Node renderer ────────────────────────────────────────────────────────────
   const paintNode = useCallback(
     (node, ctx, globalScale) => {
       if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
-      const r = resolveRadius(node);
+      const baseR = resolveRadius(node);
       const color = resolveColor(node);
       // Use state (not just ref) so the callback is recreated on hover change → canvas repaint
       const isHovered = hoveredNode?.id === node.id;
+      // Expand radius on hover
+      const r = isHovered ? baseR * 1.45 : baseR;
 
       // Glow / aura for L3 only
       if (node.nodeType === "L3") {
@@ -207,15 +330,40 @@ function NetworkGraphInner({ onNodeSelect, isDarkMode }) {
         ctx.strokeStyle = isDarkMode ? "#f4f4f5" : "#111111";
         ctx.lineWidth = 2.5 / globalScale;
         ctx.stroke();
+
+        // Label badge below the node
+        const label = node.label || node.id || "";
+        const fontSize = Math.max(10, 13 / globalScale);
+        ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const textW = ctx.measureText(label).width;
+        const pad = 5 / globalScale;
+        const gap = 7 / globalScale;
+        const bx = node.x - textW / 2 - pad;
+        const by = node.y + r + gap;
+        const bw = textW + pad * 2;
+        const bh = fontSize + pad * 2;
+        const br = Math.min(4 / globalScale, bh / 2);
+        // Pill background
+        ctx.fillStyle = isDarkMode
+          ? "rgba(15,15,20,0.82)"
+          : "rgba(255,255,255,0.90)";
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bw, bh, [br]);
+        ctx.fill();
+        // Text
+        ctx.fillStyle = isDarkMode ? "#f4f4f5" : "#111111";
+        ctx.fillText(label, node.x, by + bh / 2);
       }
     },
     [hoveredNode, isDarkMode],
   );
 
-  // Clickable / hoverable hit area (generously sized)
+  // Clickable / hoverable hit area — generously padded so small nodes are easy to click
   const paintNodeArea = useCallback((node, color, ctx) => {
     if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
-    const r = resolveRadius(node) + 6;
+    const r = resolveRadius(node) * 1.45 + 14; // matches hover size + extra margin
     ctx.beginPath();
     ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
     ctx.fillStyle = color;
@@ -273,6 +421,16 @@ function NetworkGraphInner({ onNodeSelect, isDarkMode }) {
     onNodeSelect?.(pinnedNode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pinnedNode]);
+
+  // Keep the sidebar in sync when live topology refreshes for the pinned node
+  useEffect(() => {
+    if (!pinnedNode) return;
+    const updated = graphData.nodes.find((n) => n.id === pinnedNode.id);
+    if (updated && JSON.stringify(updated) !== JSON.stringify(pinnedNode)) {
+      setPinnedNode({ ...updated });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphData]);
 
   // ── Click handling ───────────────────────────────────────────────────────────
   const onNodeClick = useCallback((node) => {
