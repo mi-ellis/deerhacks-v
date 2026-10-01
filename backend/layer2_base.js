@@ -76,7 +76,7 @@ const L3_URL         = process.env.L3_URL || null;       // optional upstream ag
 // Set via CLI arg 4 or env var L3_JOIN_URL.
 const L3_JOIN_TARGET = _arg3 || process.env.L3_JOIN_URL || null;
 const DISCOVERY_PORT = 5099;
-const OWN_URL        = `http://localhost:${PORT}`;
+const OWN_URL        = `http://10.153.9.216:${PORT}`;
 
 // ─── Heartbeat constants ──────────────────────────────────────────────────────
 const L1_HEARTBEAT_TTL_MS  = 9_000;   // 3 × HEARTBEAT_INTERVAL — mark device DEAD after this

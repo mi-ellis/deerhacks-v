@@ -174,7 +174,7 @@ class SolanaIoTDevice:
 
         # ── HTTP peer-list from bootstrap ─────────────────────────────────
         # Strip trailing slash so f"{bootstrap}/peers" never gets double-slash.
-        bootstrap = os.environ.get("L2_BOOTSTRAP", "http://localhost:5000").rstrip('/')
+        bootstrap = os.environ.get("L2_BOOTSTRAP", "http://10.153.9.216:5000").rstrip('/')
         try:
             r = requests.get(f"{bootstrap}/peers", timeout=3)
             if r.ok:

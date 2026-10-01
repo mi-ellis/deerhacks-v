@@ -57,7 +57,7 @@ if (!_arg1) {
 const BOOTSTRAP_URL  = process.env.L2_BOOTSTRAP || null;
 const L3_URL         = process.env.L3_URL || null;
 const DISCOVERY_PORT = 5099;
-const OWN_URL        = `http://localhost:${PORT}`;
+const OWN_URL        = `http://10.153.9.216:${PORT}`;
 const L2_HEARTBEAT_INTERVAL_MS = 3_000;
 const L1_HEARTBEAT_TTL_MS      = 9_000;
 
